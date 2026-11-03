@@ -1,0 +1,22 @@
+# Normalise line endings in the repository.
+* text=auto
+
+# Source and text files
+*.h      text diff=cpp
+*.cpp    text diff=cpp
+*.txt    text
+*.md     text
+*.qss    text
+*.qrc    text
+*.csv    text eol=lf
+*.cmake  text
+
+# Windows scripts must keep CRLF
+*.bat    text eol=crlf
+*.cmd    text eol=crlf
+
+# Binary files
+*.png    binary
+*.jpg    binary
+*.ico    binary
+*.svg    text
