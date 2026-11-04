@@ -1,94 +1,75 @@
 # Smart City Route & Infrastructure Planner
 
-A C++17 / Qt 6 desktop application that models a city transportation network as a
-weighted graph and applies classic algorithms to plan routes, analyse connectivity
-and select infrastructure projects under a limited budget.
+A C++17 command-line program that models a city road network as a weighted
+graph. Later milestones add graph algorithms to explore the network, find
+shortest routes and plan a minimum road network.
 
 **Team:** Quad Core
 **Course:** CSE 232 — Algorithms project
 
-> **Status:** Milestone 1 (project foundation) is complete. Algorithms and the full
-> application screens are added in later milestones.
+> **Status:** Milestone S1 — add and show locations and roads, show the city
+> network. Data is not saved yet.
 
-## Technology Stack
+## Features
 
-- C++17 and the Standard Template Library
-- Qt 6 Widgets (desktop interface)
-- CMake + Ninja (build system)
-- CTest (test runner)
-- CSV files (data storage)
+| Feature | Status |
+|---|---|
+| Add and show locations | Done (S1) |
+| Add and show roads | Done (S1) |
+| Show the city network (adjacency list) | Done (S1) |
+| Edit and delete locations and roads | Planned |
+| Save and load data (CSV files) | Planned |
+| Explore the network with BFS and DFS | Planned |
+| Shortest route with Dijkstra's algorithm | Planned |
+| Minimum spanning tree with Kruskal's algorithm | Planned |
 
 ## Project Structure
 
 ```
-CMakeLists.txt        Build configuration
-include/              Header files
-  core/               Core layer (no Qt dependency)
-  ui/                 Qt user interface
-src/                  Source files (same layout as include/)
-resources/            Qt resources (application stylesheet)
-data/                 CSV data files
-tests/                Test executables run by CTest
-docs/                 Project documentation
+CMakeLists.txt      Build instructions for CMake
+include/graph.h     Edge and Road structs, Graph class (declarations)
+src/graph.cpp       Graph functions (the city data)
+src/main.cpp        Menu program: input, output and menu options
+tests/tests.cpp     Automatic checks for the Graph class
+docs/               Project documentation
+future-gui/         Qt 6 GUI prototype (not built; kept for a later version)
 ```
 
-The project is split into two parts:
+`graph.cpp` never prints or reads the keyboard; only `main.cpp` does. This keeps
+the graph code reusable for a future Qt GUI.
 
-- **`scp_core`** — a static library with the data models, graph, CSV handling and
-  algorithms. It uses only standard C++, so it can be tested without the GUI.
-- **`SmartCityPlanner`** — the Qt Widgets desktop application, which uses `scp_core`.
+## Requirements (Windows 10/11)
 
-## Prerequisites (Windows 10/11)
+- MinGW-w64 GCC with C++17 support (tested with GCC 15.1.0)
+- CMake 3.21 or newer (tested with 3.30.5)
+- Ninja (tested with 1.12.1)
 
-Install the following with the **Qt Online Installer**
-(<https://www.qt.io/download-open-source>, free Qt account required).
-Choose **Custom installation** and select:
+## Build, Test and Run
 
-| Installer section | Component |
-|---|---|
-| Qt → Qt 6.12.0 | MinGW 15.1.0 64-bit |
-| Qt → Developer and Designer Tools | MinGW 15.1.0 64-bit |
-| | CMake |
-| | Ninja |
-
-The commands below assume Qt is installed in `S:\Qt`. If you installed it elsewhere
-(for example `C:\Qt`), replace `S:` with your drive.
-
-> **Note:** If Windows *Smart App Control* is turned on, it blocks programs you compile
-> yourself. Check **Windows Security → App & browser control → Smart App Control**.
-
-## Build and Run
-
-Open **PowerShell** in the project folder and run:
+Open **PowerShell** in the project folder:
 
 ```powershell
-# 1. Use the Qt MinGW toolchain for this terminal session
+# Put the compiler, CMake and Ninja on the PATH (adjust to your install location)
 $env:PATH = "S:\Qt\Tools\mingw1510_64\bin;S:\Qt\Tools\CMake_64\bin;S:\Qt\Tools\Ninja;$env:PATH"
 
-# 2. Configure
-cmake -S . -B build -G Ninja -DCMAKE_PREFIX_PATH=S:/Qt/6.12.0/mingw_64
-
-# 3. Build
-cmake --build build
-
-# 4. Run the tests
-ctest --test-dir build --output-on-failure
-
-# 5. Start the application
-.\build\SmartCityPlanner.exe
+cmake -S . -B build -G Ninja                 # configure (once)
+cmake --build build                          # build
+ctest --test-dir build --output-on-failure   # run the tests
+.\build\SmartCityPlanner.exe                 # start the program
 ```
 
-The build copies the required Qt DLLs (using `windeployqt`) and the `data` folder next
-to `SmartCityPlanner.exe`, so the program can also be started by double-clicking it.
+The program needs the MinGW runtime DLLs, so start it from a terminal where the
+compiler folder is on the PATH (as above).
 
-The default build type is **Release**. For debugging, add `-DCMAKE_BUILD_TYPE=Debug`
-to the configure command.
+## Documentation
 
-## Testing
-
-Tests use a small built-in `CHECK(...)` helper (`tests/test_utils.h`) instead of an
-external framework. Each test executable is registered with CTest and returns a
-non-zero exit code if any check fails.
+| Document | Description |
+|---|---|
+| [docs/algorithms.md](docs/algorithms.md) | The graph data structure and the algorithms |
+| [docs/user-guide.md](docs/user-guide.md) | How to use the program |
+| [docs/development-notes.md](docs/development-notes.md) | Toolchain, code walkthrough, Git workflow, decisions |
+| `docs/project-proposal.pdf` | Official project proposal *(to be added)* |
+| `docs/project-report.pdf` | Official project report *(to be added)* |
 
 ---
 
