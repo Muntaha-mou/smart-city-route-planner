@@ -8,13 +8,37 @@
 
 #include "graph.h"
 
+#include <cctype>
 #include <cmath>
 
-// True if the name is empty or contains only spaces/tabs.
-// (Only used in this file.)
-static bool isBlankName(const std::string& name)
+// ===== Validation rules (see graph.h) =====
+
+bool isValidDistance(double distance)
 {
-    return name.find_first_not_of(" \t") == std::string::npos;
+    // isfinite() is false for infinity and NaN ("not a number").
+    return std::isfinite(distance) && distance > 0 && distance <= MAX_ROAD_DISTANCE;
+}
+
+std::string trimName(const std::string& name)
+{
+    const std::string spaces = " \t\r\n";
+    size_t start = name.find_first_not_of(spaces);
+    if (start == std::string::npos) {
+        return "";   // the name contains only spaces
+    }
+    size_t end = name.find_last_not_of(spaces);
+    return name.substr(start, end - start + 1);
+}
+
+// Returns the text with every letter in lower case: "BUBT Campus" -> "bubt campus".
+// Used to compare names without caring about upper/lower case.
+static std::string toLowerCase(const std::string& text)
+{
+    std::string result = text;
+    for (char& c : result) {
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+    return result;
 }
 
 // ===== Locations =====
@@ -22,14 +46,15 @@ static bool isBlankName(const std::string& name)
 // Time: O(V) because nameExists() checks every name.
 int Graph::addLocation(const std::string& name)
 {
-    if (isBlankName(name) || nameExists(name)) {
+    std::string cleanName = trimName(name);
+    if (cleanName.empty() || nameExists(cleanName)) {
         return -1;
     }
 
     int id = nextId;
     nextId++;
 
-    names[id] = name;
+    names[id] = cleanName;
     adjacency[id] = std::vector<Edge>();   // a new location has no roads yet
     return id;
 }
@@ -37,11 +62,12 @@ int Graph::addLocation(const std::string& name)
 // Time: O(V) because nameExists() checks every name.
 bool Graph::addLocationWithId(int id, const std::string& name)
 {
-    if (id <= 0 || hasLocation(id) || isBlankName(name) || nameExists(name)) {
+    std::string cleanName = trimName(name);
+    if (id <= 0 || hasLocation(id) || cleanName.empty() || nameExists(cleanName)) {
         return false;
     }
 
-    names[id] = name;
+    names[id] = cleanName;
     adjacency[id] = std::vector<Edge>();
 
     // Make sure a location added later gets a new, unused ID.
@@ -51,19 +77,21 @@ bool Graph::addLocationWithId(int id, const std::string& name)
     return true;
 }
 
-// Time: O(V) because nameExists() checks every name.
+// Time: O(V) because findLocationId() checks every name.
 bool Graph::renameLocation(int id, const std::string& newName)
 {
-    if (!hasLocation(id) || isBlankName(newName)) {
+    std::string cleanName = trimName(newName);
+    if (!hasLocation(id) || cleanName.empty()) {
         return false;
     }
     // The name may not belong to a DIFFERENT location.
-    // (Keeping the same name for the same location is allowed.)
-    if (nameExists(newName) && names[id] != newName) {
+    // (The same location may keep its name or change its capital letters.)
+    int owner = findLocationId(cleanName);
+    if (owner != -1 && owner != id) {
         return false;
     }
 
-    names[id] = newName;
+    names[id] = cleanName;
     return true;
 }
 
@@ -92,15 +120,22 @@ bool Graph::hasLocation(int id) const
     return names.count(id) > 0;
 }
 
-bool Graph::nameExists(const std::string& name) const
+// Time: O(V) - every name is compared.
+int Graph::findLocationId(const std::string& name) const
 {
+    std::string wanted = toLowerCase(trimName(name));
     // In a std::map, each entry has a key (entry.first) and a value (entry.second).
     for (const auto& entry : names) {
-        if (entry.second == name) {
-            return true;
+        if (toLowerCase(entry.second) == wanted) {
+            return entry.first;
         }
     }
-    return false;
+    return -1;
+}
+
+bool Graph::nameExists(const std::string& name) const
+{
+    return findLocationId(name) != -1;
 }
 
 std::string Graph::getName(int id) const
@@ -149,7 +184,7 @@ bool Graph::addRoad(int from, int to, double distance)
     if (from == to) {
         return false;
     }
-    if (!std::isfinite(distance) || distance <= 0) {
+    if (!isValidDistance(distance)) {
         return false;
     }
     if (hasRoad(from, to)) {
@@ -168,7 +203,7 @@ bool Graph::updateRoad(int from, int to, double distance)
     if (!hasRoad(from, to)) {
         return false;
     }
-    if (!std::isfinite(distance) || distance <= 0) {
+    if (!isValidDistance(distance)) {
         return false;
     }
 

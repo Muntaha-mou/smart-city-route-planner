@@ -63,8 +63,8 @@ again after every change:
 
 - If the files do not exist, the program starts with an empty city.
 - Invalid lines (wrong number of values, non-numeric IDs, duplicate IDs or
-  names, unknown locations, non-positive distances, duplicate roads) are
-  skipped, and a note with the line number is shown at start-up.
+  names, unknown locations, distances not between 0 and 10,000 km, duplicate
+  roads) are skipped, and a note with the line number is shown at start-up.
 - The paths are relative to the folder the program is started in, so start it
   from the project folder.
 - These working files are not stored in Git (see `.gitignore`).

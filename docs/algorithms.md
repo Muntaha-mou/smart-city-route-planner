@@ -237,7 +237,8 @@ Dijkstra(start, destination):
 **Why it needs positive distances:** once a location is taken from the queue,
 Dijkstra never changes its distance again. With a negative road, a later detour
 could still make it shorter, so the answer could be wrong. Our graph only allows
-distances greater than 0.
+distances greater than 0 (and at most 10,000 km, so totals always stay ordinary
+numbers).
 
 **Complexity:** each road can add one entry to the priority queue, and each
 queue operation takes O(log V). Dijkstra therefore takes **O((V + E) log V)**

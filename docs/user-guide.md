@@ -54,6 +54,9 @@ and roads were loaded.
 - **Add location:** type a name, for example `BUBT`. The program gives it the
   next ID automatically (1, 2, 3, ...).
 - A name cannot be empty, cannot contain a comma, and cannot be used twice.
+  Spaces at the start and end are removed, and upper/lower case is ignored
+  when checking for duplicates: `BUBT`, ` BUBT ` and `bubt` count as the same
+  name. The name is shown with the capital letters you typed.
 - **Show locations:** prints a table with each location's ID, name and number
   of roads.
 
@@ -71,8 +74,8 @@ and roads were loaded.
 - Roads are two-way: a road from BUBT to Mirpur 10 can be used in both
   directions.
 - A road is refused if a location ID does not exist, both IDs are the same,
-  the distance is not greater than 0, or a road between the two locations
-  already exists.
+  the distance is not greater than 0 or is more than 10,000 km, or a road
+  between the two locations already exists.
 - Numbers must be typed on their own: `12abc` or `4.5km` is not accepted, and
   the program asks again.
 - **Show roads:** prints a table of every road with the IDs and names of both
@@ -102,7 +105,7 @@ locations it is directly connected to, with the road distances.
   deletes it. All roads connected to the location are deleted as well.
 - **Update road distance (7):** the program shows the roads, then asks for the
   two location IDs of the road (in either order) and the new distance, which
-  must be greater than 0.
+  must be greater than 0 and at most 10,000 km.
 - **Delete road (8):** the program shows the roads and asks for the two
   location IDs of the road to delete. The locations themselves are kept.
 - IDs of deleted locations are never given to new locations, even after the

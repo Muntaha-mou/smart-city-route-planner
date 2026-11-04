@@ -5,7 +5,6 @@
 
 #include "storage.h"
 
-#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -128,18 +127,23 @@ static void loadLocations(Graph& city, const string& file, vector<string>& messa
         string where = file + " line " + to_string(lineNumber) + ": ";
         vector<string> parts = splitByComma(line);
         int id;
+        string name;
+        if (parts.size() == 2) {
+            name = trimName(parts[1]);   // " BUBT " is stored as "BUBT"
+        }
 
         if (parts.size() != 2) {
             messages.push_back(where + "expected 2 values (id,name). Line skipped.");
         } else if (!textToInt(parts[0], id) || id <= 0) {
             messages.push_back(where + "the ID must be a positive whole number. Line skipped.");
-        } else if (parts[1].find_first_not_of(" \t") == string::npos) {
+        } else if (name.empty()) {
             messages.push_back(where + "the name is empty. Line skipped.");
         } else if (city.hasLocation(id)) {
             messages.push_back(where + "ID " + to_string(id) + " is used twice. Line skipped.");
-        } else if (city.nameExists(parts[1])) {
-            messages.push_back(where + "the name \"" + parts[1] + "\" is used twice. Line skipped.");
-        } else if (!city.addLocationWithId(id, parts[1])) {
+        } else if (city.nameExists(name)) {
+            // Names are compared ignoring upper/lower case.
+            messages.push_back(where + "the name \"" + name + "\" is used twice. Line skipped.");
+        } else if (!city.addLocationWithId(id, name)) {
             messages.push_back(where + "invalid location. Line skipped.");
         }
     }
@@ -173,8 +177,9 @@ static void loadRoads(Graph& city, const string& file, vector<string>& messages)
             messages.push_back(where + "expected 3 values (from,to,distance). Line skipped.");
         } else if (!textToInt(parts[0], from) || !textToInt(parts[1], to)) {
             messages.push_back(where + "location IDs must be whole numbers. Line skipped.");
-        } else if (!textToDouble(parts[2], distance) || !isfinite(distance) || distance <= 0) {
-            messages.push_back(where + "the distance must be a positive number. Line skipped.");
+        } else if (!textToDouble(parts[2], distance) || !isValidDistance(distance)) {
+            messages.push_back(where + "the distance must be a number greater than 0 and at most " +
+                               to_string(static_cast<int>(MAX_ROAD_DISTANCE)) + " km. Line skipped.");
         } else if (!city.hasLocation(from) || !city.hasLocation(to)) {
             messages.push_back(where + "the road uses a location ID that does not exist. Line skipped.");
         } else if (from == to) {

@@ -83,12 +83,12 @@ bool readYes(const string& prompt)
 }
 
 // Checks a location name typed by the user and prints the problem, if any.
+// The name should already be trimmed (see trimName in graph.h).
 // `ownId` is the location being renamed (0 when adding a new location),
 // so that a location may keep its own name.
 bool isValidName(const Graph& city, const string& name, int ownId)
 {
-    // A name made only of spaces or tabs counts as empty.
-    if (name.find_first_not_of(" \t") == string::npos) {
+    if (name.empty()) {
         cout << "  Error: the name cannot be empty.\n";
         return false;
     }
@@ -96,8 +96,10 @@ bool isValidName(const Graph& city, const string& name, int ownId)
         cout << "  Error: the name cannot contain a comma.\n";
         return false;
     }
-    if (city.nameExists(name) && city.getName(ownId) != name) {
-        cout << "  Error: a location named \"" << name << "\" already exists.\n";
+    // Names are compared ignoring upper/lower case: "bubt" is the same as "BUBT".
+    int owner = city.findLocationId(name);
+    if (owner != -1 && owner != ownId) {
+        cout << "  Error: a location named \"" << city.getName(owner) << "\" already exists.\n";
         return false;
     }
     return true;
@@ -118,7 +120,7 @@ void saveChanges(const Graph& city)
 // Option 1: add a new location.
 void addLocation(Graph& city)
 {
-    string name = readLine("Location name: ");
+    string name = trimName(readLine("Location name: "));   // remove spaces at both ends
     if (!isValidName(city, name, 0)) {
         return;
     }
@@ -161,7 +163,7 @@ void renameLocation(Graph& city)
     }
 
     string oldName = city.getName(id);
-    string newName = readLine("New name: ");
+    string newName = trimName(readLine("New name: "));
     if (!isValidName(city, newName, id)) {
         return;
     }
@@ -224,8 +226,9 @@ void addRoad(Graph& city)
         cout << "  Error: location " << to << " does not exist.\n";
     } else if (from == to) {
         cout << "  Error: a road must connect two different locations.\n";
-    } else if (distance <= 0) {
-        cout << "  Error: the distance must be greater than 0.\n";
+    } else if (!isValidDistance(distance)) {
+        cout << "  Error: the distance must be greater than 0 and at most "
+             << MAX_ROAD_DISTANCE << " km.\n";
     } else if (city.hasRoad(from, to)) {
         cout << "  Error: a road between these two locations already exists.\n";
     } else {
@@ -286,8 +289,9 @@ void updateRoad(Graph& city)
     }
 
     double distance = readDouble("New distance in km: ");
-    if (distance <= 0) {
-        cout << "  Error: the distance must be greater than 0.\n";
+    if (!isValidDistance(distance)) {
+        cout << "  Error: the distance must be greater than 0 and at most "
+             << MAX_ROAD_DISTANCE << " km.\n";
         return;
     }
 

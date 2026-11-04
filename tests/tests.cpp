@@ -953,6 +953,169 @@ void testKruskalEqualDistances()
           "after deleting location 3: no roads left, 3 components");
 }
 
+// ===== S6.2: name rules and maximum road distance =====
+
+void testNameTrimmingAndCase()
+{
+    cout << "\nNames: trimming and upper/lower case\n";
+    check(trimName("  Mirpur 10  ") == "Mirpur 10", "trimName removes spaces at both ends");
+    check(trimName("\tBUBT\r\n") == "BUBT", "trimName removes tabs and line breaks");
+    check(trimName("Mirpur  10") == "Mirpur  10", "trimName keeps spaces inside the name");
+    check(trimName("   ") == "", "a name of only spaces becomes empty");
+
+    Graph city;
+    check(city.addLocation("  BUBT  ") == 1, "a name with spaces around it is added");
+    check(city.getName(1) == "BUBT", "the name is stored without the spaces");
+    check(city.addLocation("BUBT ") == -1, "\"BUBT \" (trailing space) is a duplicate of BUBT");
+    check(city.addLocation(" BUBT") == -1, "\" BUBT\" (leading space) is a duplicate of BUBT");
+    check(city.addLocation("bubt") == -1, "\"bubt\" (lower case) is a duplicate of BUBT");
+    check(city.addLocation("BuBt") == -1, "\"BuBt\" (mixed case) is a duplicate of BUBT");
+    check(city.addLocation(" \t ") == -1, "a name that is empty after trimming is refused");
+    check(city.locationCount() == 1, "none of the duplicates were added");
+
+    check(city.addLocation("Mirpur 10") == 2, "a different name is still accepted");
+    check(city.nameExists("MIRPUR 10") && city.nameExists("  mirpur 10 "),
+          "nameExists ignores case and surrounding spaces");
+    check(city.findLocationId("mirpur 10") == 2, "findLocationId finds Mirpur 10 as \"mirpur 10\"");
+    check(city.findLocationId("Farmgate") == -1, "findLocationId returns -1 for an unknown name");
+    check(city.getName(2) == "Mirpur 10", "the original capital letters are kept for display");
+
+    Graph loaded;
+    check(loaded.addLocationWithId(5, "  Gulshan ") && loaded.getName(5) == "Gulshan",
+          "addLocationWithId trims the name");
+    check(!loaded.addLocationWithId(6, "GULSHAN"), "addLocationWithId refuses a name that differs only in case");
+    check(!loaded.addLocationWithId(7, "   "), "addLocationWithId refuses a name that is empty after trimming");
+}
+
+void testRenameWithNameRules()
+{
+    cout << "\nRename: trimming and upper/lower case\n";
+    Graph city;
+    city.addLocation("BUBT");        // ID 1
+    city.addLocation("Farmgate");    // ID 2
+
+    check(city.renameLocation(1, "Bubt"), "a location may change the capitals of its own name");
+    check(city.getName(1) == "Bubt", "the new capitals are stored");
+    check(city.renameLocation(1, "  BUBT Campus  ") && city.getName(1) == "BUBT Campus",
+          "rename trims the new name");
+    check(!city.renameLocation(1, "farmgate"), "rename to another location's name in lower case is refused");
+    check(!city.renameLocation(1, " FARMGATE "), "rename to another location's name with spaces is refused");
+    check(!city.renameLocation(1, "   "), "rename to a name that is empty after trimming is refused");
+    check(city.getName(1) == "BUBT Campus", "refused renames change nothing");
+}
+
+void testLoadDuplicateLookingNames()
+{
+    cout << "\nLoad: names that look the same\n";
+    writeFile(TEST_LOCATIONS,
+              "id,name\n"
+              "1,  BUBT  \n"          // spaces around the name: trimmed
+              "2,bubt\n"              // same name in lower case: duplicate
+              "3,BUBT \n"             // trailing space: duplicate
+              "4, Mirpur 10\n"        // leading space: trimmed
+              "5,MIRPUR 10\n"         // same name in upper case: duplicate
+              "6,Farmgate\n");
+    writeFile(TEST_ROADS, "from,to,distance\n1,4,2.5\n4,6,3\n");
+    writeFile(TEST_NEXT_ID, "7\n");
+
+    Graph city;
+    vector<string> messages;
+    loadCity(city, TEST_LOCATIONS, TEST_ROADS, TEST_NEXT_ID, messages);
+    check(city.locationCount() == 3, "only 3 locations are loaded (1, 4, 6)");
+    check(city.getName(1) == "BUBT" && city.getName(4) == "Mirpur 10", "the loaded names are trimmed");
+    check(!city.hasLocation(2) && !city.hasLocation(3) && !city.hasLocation(5),
+          "the duplicate-looking names (IDs 2, 3, 5) are skipped");
+    check(messages.size() == 3, "one warning for each of the 3 duplicate names");
+    check(city.roadCount() == 2, "the roads between the loaded locations are kept");
+
+    // Saving writes the trimmed names, so the file is clean afterwards.
+    check(saveCity(city, TEST_LOCATIONS, TEST_ROADS, TEST_NEXT_ID), "the city is saved");
+    Graph reloaded;
+    messages.clear();
+    loadCity(reloaded, TEST_LOCATIONS, TEST_ROADS, TEST_NEXT_ID, messages);
+    check(messages.empty() && reloaded.getName(1) == "BUBT" && reloaded.getName(4) == "Mirpur 10",
+          "after saving and loading again, the names are clean and there are no warnings");
+}
+
+void testMaximumRoadDistance()
+{
+    cout << "\nMaximum road distance (" << MAX_ROAD_DISTANCE << " km)\n";
+    check(MAX_ROAD_DISTANCE == 10000.0, "the maximum road distance is 10,000 km");
+    check(isValidDistance(0.5) && isValidDistance(MAX_ROAD_DISTANCE), "0.5 km and exactly 10,000 km are valid");
+    check(!isValidDistance(0.0) && !isValidDistance(-1.0), "0 km and negative distances are not valid");
+    check(!isValidDistance(10000.001) && !isValidDistance(1e308), "distances above 10,000 km are not valid");
+    check(!isValidDistance(INFINITY) && !isValidDistance(NAN), "infinity and NaN are not valid");
+
+    Graph city;
+    city.addLocation("A");   // 1
+    city.addLocation("B");   // 2
+    city.addLocation("C");   // 3
+
+    check(!city.addRoad(1, 2, 0.0), "addRoad refuses 0 km");
+    check(!city.addRoad(1, 2, -5.0), "addRoad refuses a negative distance");
+    check(!city.addRoad(1, 2, INFINITY), "addRoad refuses infinity");
+    check(!city.addRoad(1, 2, NAN), "addRoad refuses NaN");
+    check(!city.addRoad(1, 2, 10000.5), "addRoad refuses 10,000.5 km");
+    check(!city.addRoad(1, 2, 1e308), "addRoad refuses 1e308 km");
+    check(city.roadCount() == 0, "no refused road was added");
+    check(city.addRoad(1, 2, 10000.0), "addRoad accepts exactly 10,000 km");
+
+    check(!city.updateRoad(1, 2, 0.0), "updateRoad refuses 0 km");
+    check(!city.updateRoad(1, 2, -1.0), "updateRoad refuses a negative distance");
+    check(!city.updateRoad(1, 2, INFINITY), "updateRoad refuses infinity");
+    check(!city.updateRoad(1, 2, NAN), "updateRoad refuses NaN");
+    check(!city.updateRoad(1, 2, 10001.0), "updateRoad refuses 10,001 km");
+    check(city.getRoads()[0].distance == 10000.0, "refused updates change nothing");
+    check(city.updateRoad(1, 2, 9999.5) && city.getRoads()[0].distance == 9999.5,
+          "updateRoad accepts 9,999.5 km");
+    check(city.updateRoad(1, 2, 10000.0), "updateRoad accepts exactly 10,000 km");
+
+    // Loading: a distance above the maximum is skipped like any invalid line.
+    writeFile(TEST_LOCATIONS, "id,name\n1,A\n2,B\n3,C\n");
+    writeFile(TEST_ROADS, "from,to,distance\n1,2,10000\n2,3,10000.01\n1,3,1e308\n");
+    writeFile(TEST_NEXT_ID, "4\n");
+    Graph loaded;
+    vector<string> messages;
+    loadCity(loaded, TEST_LOCATIONS, TEST_ROADS, TEST_NEXT_ID, messages);
+    check(loaded.roadCount() == 1 && loaded.hasRoad(1, 2), "only the 10,000 km road is loaded");
+    check(messages.size() == 2, "the two roads above 10,000 km give one warning each");
+}
+
+void testAlgorithmsWithLargeDistances()
+{
+    cout << "\nDijkstra and Kruskal with the largest allowed distances\n";
+    // A line of 4 locations joined by 10,000 km roads, plus a 1 km shortcut
+    // road from 1 to 4. Before the limit, huge values (such as 1e308) could
+    // add up to infinity; now every total is an ordinary number.
+    Graph city;
+    for (int i = 1; i <= 4; i++) {
+        city.addLocation("M" + to_string(i));
+    }
+    city.addRoad(1, 2, MAX_ROAD_DISTANCE);
+    city.addRoad(2, 3, MAX_ROAD_DISTANCE);
+    city.addRoad(3, 4, MAX_ROAD_DISTANCE);
+
+    RouteResult longRoute = dijkstra(city, 1, 4);
+    check(longRoute.found && nearlyEqual(longRoute.distance, 30000.0),
+          "1 -> 4 over three 10,000 km roads is found: 30,000 km");
+    check(longRoute.path == vector<int>({1, 2, 3, 4}), "the route is {1, 2, 3, 4}");
+
+    SpanningResult tree = kruskal(city);
+    check(tree.connected && nearlyEqual(tree.totalDistance, 30000.0),
+          "Kruskal total of three 10,000 km roads is 30,000 km");
+
+    city.addRoad(1, 4, 1.0);
+    RouteResult shortcut = dijkstra(city, 1, 4);
+    check(nearlyEqual(shortcut.distance, 1.0) && shortcut.path == vector<int>({1, 4}),
+          "with a 1 km road, 1 -> 4 uses it: 1 km");
+    SpanningResult newTree = kruskal(city);
+    // Sorted: 1-4 (1 km), then the equal roads 1-2, 2-3, 3-4 by ID.
+    // 1-4, 1-2 and 2-3 connect everything, so 3-4 would make a cycle.
+    check(nearlyEqual(newTree.totalDistance, 20001.0) && !selectsRoad(newTree, 3, 4),
+          "Kruskal now keeps 1-4, 1-2 and 2-3 (20,001 km), skipping 3-4");
+    check(isSpanningForest(city, newTree), "the result is still a valid spanning tree");
+}
+
 int main()
 {
     testLocations();
@@ -980,6 +1143,11 @@ int main()
     testKruskalConnected();
     testKruskalDisconnected();
     testKruskalEqualDistances();
+    testNameTrimmingAndCase();
+    testRenameWithNameRules();
+    testLoadDuplicateLookingNames();
+    testMaximumRoadDistance();
+    testAlgorithmsWithLargeDistances();
 
     cout << "\n" << passed << " passed, " << failed << " failed\n";
 

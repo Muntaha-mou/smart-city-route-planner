@@ -92,22 +92,24 @@ class Graph {
 
 | Function | What it does |
 |---|---|
-| `addLocation(name)` | Refuses an empty or already-used name (returns -1). Otherwise gives the location the next ID, stores its name, creates an empty road list, and returns the ID. |
+| `addLocation(name)` | Trims the name and refuses it if it is empty or already used, ignoring upper/lower case (returns -1). Otherwise gives the location the next ID, stores the trimmed name, creates an empty road list, and returns the ID. |
 | `hasLocation(id)` | `true` if a location with this ID exists. |
-| `nameExists(name)` | `true` if any location already has this name. |
+| `findLocationId(name)` | The ID of the location with this name, or -1. Names are trimmed and compared ignoring upper/lower case (`trimName()` and a lower-case copy). |
+| `nameExists(name)` | `true` if any location already has this name (same rules as `findLocationId`). |
+| `trimName(name)`, `isValidDistance(d)` | Shared rules (free functions in `graph.h`): remove spaces at both ends of a name; a distance must be finite, greater than 0 and at most `MAX_ROAD_DISTANCE` (10,000 km). Used by `Graph`, the menu and the CSV loader. |
 | `getName(id)` | The location's name, or `""` if the ID does not exist. |
 | `getLocationIds()` | All IDs in increasing order. |
 | `locationCount()` | Number of locations. |
-| `addRoad(from, to, distance)` | Refuses the road (returns `false`) if a location is missing, both ends are the same, the distance is not a positive number, or the road already exists. Otherwise adds an `Edge` to **both** locations' lists. |
+| `addRoad(from, to, distance)` | Refuses the road (returns `false`) if a location is missing, both ends are the same, the distance is not valid (`isValidDistance`: greater than 0 and at most 10,000 km), or the road already exists. Otherwise adds an `Edge` to **both** locations' lists. |
 | `hasRoad(from, to)` | Looks through `from`'s list for an edge going to `to`. |
 | `getNeighbors(id)` | The list of roads starting at this location. |
 | `getRoads()` | Every road once: each road is stored twice, so only the copy where `from < to` is kept. |
 | `roadCount()` | Number of roads. |
 | `addLocationWithId(id, name)` | Used only when loading: adds a location with its **saved** ID, so roads still point to the right locations. Moves `nextId` past the highest ID. |
 | `getNextId()`, `setNextId(id)` | Read the next ID (for saving) and restore it (when loading). `setNextId` can only **raise** the value, so an ID is never reused. |
-| `renameLocation(id, newName)` | Changes the name. Refused if the location is missing, the name is empty, or another location already has it. |
+| `renameLocation(id, newName)` | Trims the new name and changes it. Refused if the location is missing, the name is empty, or **another** location already has it (ignoring case); a location may change the capitals of its own name. |
 | `removeLocation(id)` | Each road is stored in two lists, so it first removes this location from every **neighbour's** list, then erases the location and its own list. |
-| `updateRoad(from, to, distance)` | Changes the distance in **both** copies of the road. Refused if the road does not exist or the distance is not positive. |
+| `updateRoad(from, to, distance)` | Changes the distance in **both** copies of the road. Refused if the road does not exist or the distance is not valid (`isValidDistance`). |
 | `removeRoad(from, to)` | Removes **both** copies of the road. The locations are kept. |
 
 Functions marked `const` only *read* the graph; they never change it.
@@ -206,6 +208,8 @@ the failure.
 | 2026-11-04 | One weight per road: distance in km | Used by both Dijkstra and Kruskal; easy to explain |
 | 2026-11-04 | At most one road between two locations; roads are two-way | Simple undirected graph |
 | 2026-11-04 | Names may not be empty, repeated or contain commas | Clear choices in menus; simple CSV files |
+| 2026-11-04 | Names are trimmed and compared ignoring upper/lower case (S6.2) | "BUBT", " BUBT " and "bubt" looked like different locations; the typed capitals are kept for display |
+| 2026-11-04 | Road distances are limited to 10,000 km (`MAX_ROAD_DISTANCE`, S6.2) | Larger values are not realistic and could make Dijkstra and Kruskal totals overflow to infinity |
 | 2026-11-04 | Algorithms in scope: BFS, DFS, Dijkstra, Kruskal | Core graph algorithms of the course; Kruskal handles disconnected networks naturally |
 | 2026-11-04 | Excluded for now: budget planning, Floyd–Warshall, Prim, Merge Sort, transport modes, fares | Keep the first version small; may return if the official proposal requires them |
 | 2026-11-04 | No static linking | Keep CMake simple; run from a terminal with MinGW on the PATH |
