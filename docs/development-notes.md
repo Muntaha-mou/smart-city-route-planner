@@ -59,11 +59,12 @@ so run them from a terminal where the MinGW `bin` folder is on the PATH.
 | `include/graph.h` | `Edge` and `Road` structs, `Graph` class declaration | No |
 | `src/graph.cpp` | The code of the `Graph` functions | No |
 | `include/storage.h`, `src/storage.cpp` | `saveCity()` and `loadCity()`: CSV files | No (returns messages instead) |
+| `include/algorithms.h`, `src/algorithms.cpp` | `bfs()` and `dfs()` (later also Dijkstra and Kruskal) | No |
 | `src/main.cpp` | Input functions, one function per menu option, `main()` | Yes |
-| `tests/tests.cpp` | Automatic checks for `Graph` and for saving/loading | Prints PASS/FAIL |
+| `tests/tests.cpp` | Automatic checks for `Graph`, saving/loading, BFS and DFS | Prints PASS/FAIL |
 
-**Main rule:** `graph.cpp`, `storage.cpp` (and later the algorithm code) never
-print and never read the keyboard. They only store data and return answers.
+**Main rule:** `graph.cpp`, `storage.cpp` and `algorithms.cpp` never print and
+never read the keyboard. They only store data and return answers.
 `main.cpp` talks to the user. This lets a future Qt GUI reuse this code
 unchanged.
 
@@ -119,6 +120,16 @@ Functions marked `const` only *read* the graph; they never change it.
 | `loadCity(city, locationsFile, roadsFile, nextIdFile, messages)` | Loads locations **first** (roads refer to their IDs), then roads, then the next ID. Each line is split at commas and checked; a bad line is skipped and a message with its line number is added to `messages`. A missing file just leaves the city empty. The saved next ID is used only if it is larger than "highest ID + 1"; otherwise a note is added. |
 | `splitByComma`, `textToInt`, `textToDouble` | Small helpers used only inside `storage.cpp`. |
 
+### Algorithms (in `algorithms.cpp`)
+
+| Function | What it does |
+|---|---|
+| `bfs(city, startId)` | Breadth-First Search with a `queue`. Returns the IDs in visiting order, or an empty list if the start does not exist. A location is marked visited when it is **added** to the queue, so it is never added twice. |
+| `dfs(city, startId)` | Depth-First Search. Calls `dfsVisit()`, which visits a location and then calls itself for each unvisited neighbour (recursion); returning from the call is the backtracking step. |
+| `sortedNeighborIds(city, id)` | The neighbour IDs of a location, sorted. Both algorithms use it, so the visiting order is always the same for the same city. |
+
+See `docs/algorithms.md` for step-by-step explanations and examples.
+
 ### Menu program (in `main.cpp`)
 
 | Function | What it does |
@@ -135,6 +146,7 @@ Functions marked `const` only *read* the graph; they never change it.
 | `updateRoad(city)`, `deleteRoad(city)` | Show the roads, ask for the road's two location IDs (`readExistingRoad`), then call the `Graph` function. |
 | `isValidName(city, name, ownId)` | The name rules shared by add and rename (not empty, no comma, not used by another location). |
 | `saveChanges(city)` | Called after every successful change; saves the city and prints `(Saved)` or a warning. |
+| `traverseNetwork(city, useBfs)` | Options 10 and 11. Asks for a start ID, runs `bfs()` or `dfs()`, prints the visiting order with names and IDs, how many locations were reached, and the locations that are not reachable. |
 | `main()` | Creates the `Graph`, loads the saved city (showing any notes), shows the menu in a loop, and calls the function for the chosen option until the user chooses 0. |
 
 The menu functions check the user's input and explain any problem; `Graph`
@@ -146,8 +158,12 @@ also refuses invalid data as a safety net.
 **FAIL** if not. Each `test...()` function calls `check()` many times: adding,
 renaming and deleting locations; adding, updating and deleting roads; and
 saving and loading (empty city, full city with ID gaps, missing files, and a
-file with 16 invalid lines, files without a header, an impossible save folder, and ID persistence after deleting and restarting). The save/load tests write temporary files into a
-`test_data` folder. `main()` returns 1 if anything failed, so `ctest` reports
+file with 16 invalid lines, files without a header, an impossible save folder,
+and ID persistence after deleting and restarting); and BFS and DFS (empty city,
+unknown start, single location, known visiting orders on a network with a
+cycle, disconnected parts, each location visited once, and the same result
+after changes and after saving/loading). The save/load tests write temporary
+files into a `test_data` folder. `main()` returns 1 if anything failed, so `ctest` reports
 the failure.
 
 ## 4. Git Workflow
@@ -182,6 +198,8 @@ the failure.
 | 2026-11-04 | Invalid CSV lines are skipped with a message, not fatal | One bad line should not lose the rest of the city |
 | 2026-11-04 | Working files `data/locations.csv` and `data/roads.csv` are not in Git; sample files are in `data/sample/` | Test changes do not end up in commits; everyone can start from the same sample |
 | 2026-11-04 | Deleting a location asks for confirmation (y/n) | It also deletes all its roads |
+| 2026-11-04 | BFS and DFS visit neighbours in increasing ID order | Roads are stored in the order they were added, which changes after saving and loading; sorting gives the same, testable result every time |
+| 2026-11-04 | DFS uses recursion | Shortest and clearest code for students; the city networks in this project are small |
 
 ## 6. Milestones
 
@@ -189,8 +207,8 @@ the failure.
 |---|---|---|
 | M1 | Project foundation (CMake, Qt prototype) | Done (`78f875e`) |
 | S1 | Add/show locations and roads, city network display, plain console menu, tests | Done (`6f76f77`) |
-| S2 | Rename/delete locations, update/delete roads, CSV save/load, sample data | In review |
-| S3 | BFS and DFS | Planned |
+| S2 | Rename/delete locations, update/delete roads, CSV save/load, sample data | Done (`c3fc761`) |
+| S3 | BFS and DFS | In review |
 | S4 | Dijkstra's shortest route | Planned |
 | S5 | Kruskal's minimum spanning tree | Planned |
 | S6 | Final tests, documentation, Pull Request to `master` | Planned |

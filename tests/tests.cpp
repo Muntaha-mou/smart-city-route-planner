@@ -8,6 +8,7 @@
 // At the end the program returns 1 if anything failed, so CTest
 // reports the test as failed.
 
+#include "algorithms.h"
 #include "graph.h"
 #include "storage.h"
 
@@ -416,6 +417,120 @@ void testLoadWithoutHeader()
     check(messages.empty(), "there are no warnings");
 }
 
+// ===== S3: BFS and DFS =====
+
+// The test network (roads are added in a mixed-up order on purpose, to check
+// that neighbours are always visited in increasing ID order):
+//
+//    1 --- 2
+//    |     |          6 (no roads)        7 --- 8
+//    3 --- 4 --- 5
+//
+Graph makeTraversalCity()
+{
+    Graph city;
+    for (int i = 1; i <= 8; i++) {
+        city.addLocation("L" + to_string(i));   // IDs 1 to 8
+    }
+    city.addRoad(4, 5, 1.0);
+    city.addRoad(1, 3, 1.0);
+    city.addRoad(3, 4, 1.0);
+    city.addRoad(2, 4, 1.0);
+    city.addRoad(1, 2, 1.0);
+    city.addRoad(8, 7, 1.0);
+    return city;
+}
+
+// True if no ID appears twice in the list.
+bool allDifferent(const vector<int>& ids)
+{
+    for (size_t i = 0; i < ids.size(); i++) {
+        for (size_t j = i + 1; j < ids.size(); j++) {
+            if (ids[i] == ids[j]) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+void testBfs()
+{
+    cout << "\nBreadth-First Search (BFS)\n";
+    Graph empty;
+    check(bfs(empty, 1).empty(), "BFS on an empty city returns nothing");
+
+    Graph city = makeTraversalCity();
+    check(bfs(city, 99).empty(), "BFS from an unknown location returns nothing");
+    check(bfs(city, 0).empty(), "BFS from ID 0 returns nothing");
+
+    Graph single;
+    single.addLocation("BUBT");
+    check(bfs(single, 1) == vector<int>{1}, "BFS in a city with one location visits only it");
+
+    check(bfs(city, 1) == vector<int>({1, 2, 3, 4, 5}), "BFS from 1 gives 1, 2, 3, 4, 5 (level by level)");
+    check(bfs(city, 5) == vector<int>({5, 4, 2, 3, 1}), "BFS from 5 gives 5, 4, 2, 3, 1");
+    check(bfs(city, 3) == vector<int>({3, 1, 4, 2, 5}), "BFS from 3 gives 3, 1, 4, 2, 5");
+
+    // Disconnected parts: only the start's own part is visited.
+    check(bfs(city, 6) == vector<int>{6}, "BFS from the isolated location 6 visits only 6");
+    check(bfs(city, 7) == vector<int>({7, 8}), "BFS from 7 visits only its part: 7, 8");
+    check(bfs(city, 1).size() == 5, "BFS from 1 does not reach 6, 7 or 8");
+
+    // The cycle 1-2-4-3-1 must not cause a location to be visited twice.
+    check(allDifferent(bfs(city, 1)), "BFS visits each location only once (even with a cycle)");
+}
+
+void testDfs()
+{
+    cout << "\nDepth-First Search (DFS)\n";
+    Graph empty;
+    check(dfs(empty, 1).empty(), "DFS on an empty city returns nothing");
+
+    Graph city = makeTraversalCity();
+    check(dfs(city, 99).empty(), "DFS from an unknown location returns nothing");
+    check(dfs(city, -1).empty(), "DFS from ID -1 returns nothing");
+
+    Graph single;
+    single.addLocation("BUBT");
+    check(dfs(single, 1) == vector<int>{1}, "DFS in a city with one location visits only it");
+
+    check(dfs(city, 1) == vector<int>({1, 2, 4, 3, 5}), "DFS from 1 gives 1, 2, 4, 3, 5 (deep first)");
+    check(dfs(city, 5) == vector<int>({5, 4, 2, 1, 3}), "DFS from 5 gives 5, 4, 2, 1, 3");
+    check(dfs(city, 3) == vector<int>({3, 1, 2, 4, 5}), "DFS from 3 gives 3, 1, 2, 4, 5");
+    check(dfs(city, 1) != bfs(city, 1), "DFS and BFS give different orders from location 1");
+
+    check(dfs(city, 6) == vector<int>{6}, "DFS from the isolated location 6 visits only 6");
+    check(dfs(city, 8) == vector<int>({8, 7}), "DFS from 8 visits only its part: 8, 7");
+    check(allDifferent(dfs(city, 1)), "DFS visits each location only once (even with a cycle)");
+}
+
+void testTraversalAfterChanges()
+{
+    cout << "\nBFS and DFS after changing the city\n";
+    Graph city = makeTraversalCity();
+
+    city.removeRoad(4, 5);   // 5 is now cut off from 1
+    check(bfs(city, 1) == vector<int>({1, 2, 3, 4}), "after deleting road 4-5, BFS from 1 no longer reaches 5");
+    check(dfs(city, 5) == vector<int>{5}, "DFS from 5 now visits only 5");
+
+    city.addRoad(6, 7, 2.0);   // joins 6 to the part 7-8
+    check(bfs(city, 6) == vector<int>({6, 7, 8}), "after adding road 6-7, BFS from 6 gives 6, 7, 8");
+
+    city.removeLocation(2);   // removes roads 1-2 and 2-4
+    check(bfs(city, 1) == vector<int>({1, 3, 4}), "after deleting location 2, BFS from 1 gives 1, 3, 4");
+    check(dfs(city, 4) == vector<int>({4, 3, 1}), "after deleting location 2, DFS from 4 gives 4, 3, 1");
+    check(bfs(city, 2).empty(), "BFS from the deleted location 2 returns nothing");
+
+    // The order does not depend on the order in which roads were loaded.
+    check(saveCity(city, TEST_LOCATIONS, TEST_ROADS, TEST_NEXT_ID), "the changed city is saved");
+    Graph loaded;
+    vector<string> messages;
+    loadCity(loaded, TEST_LOCATIONS, TEST_ROADS, TEST_NEXT_ID, messages);
+    check(bfs(loaded, 1) == bfs(city, 1) && dfs(loaded, 4) == dfs(city, 4),
+          "BFS and DFS give the same order after saving and loading");
+}
+
 int main()
 {
     testLocations();
@@ -433,6 +548,9 @@ int main()
     testInvalidNextIdFile();
     testLoadInvalidRecords();
     testLoadWithoutHeader();
+    testBfs();
+    testDfs();
+    testTraversalAfterChanges();
 
     cout << "\n" << passed << " passed, " << failed << " failed\n";
 

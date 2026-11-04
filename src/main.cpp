@@ -8,6 +8,7 @@
 // The data is loaded from CSV files when the program starts and saved again
 // after every change (see storage.h).
 
+#include "algorithms.h"
 #include "graph.h"
 #include "storage.h"
 
@@ -343,6 +344,72 @@ void showNetwork(const Graph& city)
     }
 }
 
+// ===== Traversal (BFS and DFS) =====
+
+// Options 10 and 11: traverse the network from a chosen location.
+// `useBfs` is true for BFS (option 10) and false for DFS (option 11).
+void traverseNetwork(const Graph& city, bool useBfs)
+{
+    string algorithmName = useBfs ? "BFS (Breadth-First Search)" : "DFS (Depth-First Search)";
+
+    if (city.locationCount() == 0) {
+        cout << "  The network is empty. Add some locations first.\n";
+        return;
+    }
+
+    showLocations(city);
+    cout << "\n";
+    int start = readInt("Start location ID: ");
+    if (!city.hasLocation(start)) {
+        cout << "  Error: location " << start << " does not exist.\n";
+        return;
+    }
+
+    vector<int> order;
+    if (useBfs) {
+        order = bfs(city, start);
+    } else {
+        order = dfs(city, start);
+    }
+
+    // The visiting order, one location per line.
+    cout << "\n  " << algorithmName << " from " << city.getName(start)
+         << " [" << start << "]\n\n";
+    for (size_t i = 0; i < order.size(); i++) {
+        cout << "  " << right << setw(3) << (i + 1) << ". " << city.getName(order[i])
+             << " [" << order[i] << "]\n";
+    }
+
+    // The same order on one line, e.g.  BUBT -> Mirpur 10 -> Farmgate
+    cout << "\n  Order: ";
+    for (size_t i = 0; i < order.size(); i++) {
+        if (i > 0) {
+            cout << " -> ";
+        }
+        cout << city.getName(order[i]);
+    }
+    cout << "\n\n  Reached " << order.size() << " of " << city.locationCount()
+         << " location(s).\n";
+
+    // Locations that were never visited cannot be reached from the start:
+    // they are in a different part of the network (disconnected).
+    if (static_cast<int>(order.size()) < city.locationCount()) {
+        cout << "  Not reachable from " << city.getName(start) << ":";
+        for (int id : city.getLocationIds()) {
+            bool wasVisited = false;
+            for (int visitedId : order) {
+                if (visitedId == id) {
+                    wasVisited = true;
+                }
+            }
+            if (!wasVisited) {
+                cout << " " << city.getName(id) << " [" << id << "]";
+            }
+        }
+        cout << "\n";
+    }
+}
+
 // ===== Main program =====
 
 void showMenu(const Graph& city)
@@ -356,7 +423,11 @@ void showMenu(const Graph& city)
     cout << "  3. Rename location     7. Update road distance\n";
     cout << "  4. Delete location     8. Delete road\n";
     cout << "\n";
+    cout << "  Network\n";
     cout << "  9. Show city network\n";
+    cout << "  10. Traverse network using BFS\n";
+    cout << "  11. Traverse network using DFS\n";
+    cout << "\n";
     cout << "  0. Exit\n";
     cout << "--------------------------------------------------\n";
 }
@@ -405,6 +476,10 @@ int main()
             deleteRoad(city);
         } else if (choice == 9) {
             showNetwork(city);
+        } else if (choice == 10) {
+            traverseNetwork(city, true);
+        } else if (choice == 11) {
+            traverseNetwork(city, false);
         } else if (choice == 0) {
             cout << "Goodbye!\n";
             break;

@@ -17,6 +17,7 @@ add_executable(SmartCityPlanner
     src/main.cpp
     src/graph.cpp
     src/storage.cpp
+    src/algorithms.cpp
 )
 target_include_directories(SmartCityPlanner PRIVATE include)
 
@@ -25,6 +26,7 @@ add_executable(tests
     tests/tests.cpp
     src/graph.cpp
     src/storage.cpp
+    src/algorithms.cpp
 )
 target_include_directories(tests PRIVATE include)
 

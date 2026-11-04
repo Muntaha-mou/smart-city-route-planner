@@ -30,7 +30,11 @@ cmake --build build
   3. Rename location     7. Update road distance
   4. Delete location     8. Delete road
 
+  Network
   9. Show city network
+  10. Traverse network using BFS
+  11. Traverse network using DFS
+
   0. Exit
 --------------------------------------------------
 Choose an option:
@@ -126,7 +130,38 @@ The sample distances are illustrative values, not measured distances.
 
 ## 8. Exploring the Network (BFS and DFS)
 
-*To be added in a later milestone.*
+- **Traverse network using BFS (10)** and **Traverse network using DFS (11)**
+  show the locations in the table, then ask for a **start location ID**.
+- The program prints the locations in the order the algorithm visits them
+  (with names and IDs), the same order on one line, and how many locations
+  were reached.
+- **BFS** visits the nearest locations first (level by level). **DFS** follows
+  one path as far as possible before going back.
+- Neighbours are always visited in increasing ID order, so the same city always
+  gives the same result.
+- If some locations cannot be reached from the start (the network is in
+  separate parts), they are listed as **Not reachable**.
+- An ID that does not exist gives an error message. If the city is empty, the
+  program says so.
+
+Example (sample data, BFS from BUBT):
+
+```
+  BFS (Breadth-First Search) from BUBT [1]
+
+    1. BUBT [1]
+    2. Mirpur 10 [2]
+    3. Mirpur 1 [3]
+    4. Agargaon [4]
+    5. Airport [9]
+    ...
+
+  Order: BUBT -> Mirpur 10 -> Mirpur 1 -> Agargaon -> Airport -> Mohammadpur -> ...
+
+  Reached 10 of 10 location(s).
+```
+
+See [algorithms.md](algorithms.md) for how BFS and DFS work.
 
 ## 9. Finding the Shortest Route (Dijkstra)
 

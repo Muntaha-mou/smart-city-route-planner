@@ -7,8 +7,9 @@ shortest routes and plan a minimum road network.
 **Team:** Quad Core
 **Course:** CSE 232 — Algorithms project
 
-> **Status:** Milestone S2 — locations and roads can be added, shown, updated
-> and deleted, and the city is saved to CSV files.
+> **Status:** Milestone S3 — locations and roads can be added, shown, updated
+> and deleted, the city is saved to CSV files, and the network can be explored
+> with BFS and DFS.
 
 ## Features
 
@@ -20,7 +21,7 @@ shortest routes and plan a minimum road network.
 | Rename and delete locations (deleting also removes their roads) | Done (S2) |
 | Update road distances and delete roads | Done (S2) |
 | Save and load data (CSV files) | Done (S2) |
-| Explore the network with BFS and DFS | Planned |
+| Explore the network with BFS and DFS | Done (S3) |
 | Shortest route with Dijkstra's algorithm | Planned |
 | Minimum spanning tree with Kruskal's algorithm | Planned |
 
@@ -30,17 +31,19 @@ shortest routes and plan a minimum road network.
 CMakeLists.txt      Build instructions for CMake
 include/graph.h     Edge and Road structs, Graph class (declarations)
 include/storage.h   Saving and loading the city (declarations)
+include/algorithms.h  Graph algorithms: BFS and DFS (declarations)
 src/graph.cpp       Graph functions (the city data)
 src/storage.cpp     CSV save and load
+src/algorithms.cpp  BFS and DFS
 src/main.cpp        Menu program: input, output and menu options
-tests/tests.cpp     Automatic checks for the Graph and for saving/loading
+tests/tests.cpp     Automatic checks for the Graph, saving/loading, BFS and DFS
 data/sample/        Illustrative sample data (10 Dhaka locations, 14 roads)
 docs/               Project documentation
 future-gui/         Qt 6 GUI prototype (not built; kept for a later version)
 ```
 
-`graph.cpp` and `storage.cpp` never print or read the keyboard; only `main.cpp`
-does. This keeps the graph code reusable for a future Qt GUI.
+`graph.cpp`, `storage.cpp` and `algorithms.cpp` never print or read the
+keyboard; only `main.cpp` does. This keeps the graph code reusable for a future Qt GUI.
 
 ## Data Files
 
