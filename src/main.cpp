@@ -478,6 +478,57 @@ void findShortestRoute(const Graph& city)
          << route.path.size() - 1 << " road(s))\n";
 }
 
+// ===== Minimum spanning tree (Kruskal) =====
+
+// Option 13: select the shortest set of roads that connects all locations.
+void showMinimumSpanningTree(const Graph& city)
+{
+    if (city.locationCount() == 0) {
+        cout << "  The network is empty. Add some locations first.\n";
+        return;
+    }
+
+    SpanningResult tree = kruskal(city);
+
+    if (tree.connected) {
+        cout << "  Minimum Spanning Tree (Kruskal)\n";
+    } else {
+        cout << "  Minimum Spanning Forest (Kruskal)\n";
+    }
+
+    if (tree.roads.empty()) {
+        cout << "\n  No roads were selected";
+        if (city.roadCount() == 0) {
+            cout << " (the city has no roads)";
+        }
+        cout << ".\n";
+    } else {
+        cout << "\n  " << left << setw(4) << "#" << setw(54) << "Road" << "Distance\n";
+        cout << "  " << string(68, '-') << "\n";
+        int number = 1;
+        for (const Road& road : tree.roads) {
+            string roadText = city.getName(road.from) + " [" + to_string(road.from) + "] <-> " +
+                              city.getName(road.to) + " [" + to_string(road.to) + "]";
+            cout << "  " << left << setw(4) << number << setw(54) << roadText
+                 << road.distance << " km\n";
+            number++;
+        }
+    }
+
+    cout << "\n  Selected roads: " << tree.roads.size() << " of " << city.roadCount() << "\n";
+    cout << "  Total distance: " << tree.totalDistance << " km\n\n";
+
+    if (tree.connected) {
+        cout << "  The network is connected: these roads connect all "
+             << city.locationCount() << " location(s) with the smallest total distance.\n";
+    } else {
+        cout << "  The network is NOT connected: it has " << tree.components
+             << " separate parts (components).\n";
+        cout << "  This is a Minimum Spanning Forest: one minimum tree for each part.\n";
+        cout << "  No existing roads can join the parts together.\n";
+    }
+}
+
 // ===== Main program =====
 
 void showMenu(const Graph& city)
@@ -496,6 +547,7 @@ void showMenu(const Graph& city)
     cout << "  10. Traverse network using BFS\n";
     cout << "  11. Traverse network using DFS\n";
     cout << "  12. Find shortest route (Dijkstra)\n";
+    cout << "  13. Minimum Spanning Tree (Kruskal)\n";
     cout << "\n";
     cout << "  0. Exit\n";
     cout << "--------------------------------------------------\n";
@@ -551,6 +603,8 @@ int main()
             traverseNetwork(city, false);
         } else if (choice == 12) {
             findShortestRoute(city);
+        } else if (choice == 13) {
+            showMinimumSpanningTree(city);
         } else if (choice == 0) {
             cout << "Goodbye!\n";
             break;

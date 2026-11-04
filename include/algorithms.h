@@ -50,4 +50,25 @@ struct RouteResult {
 // Time: O((V + E) log V), Space: O(V + E)
 RouteResult dijkstra(const Graph& city, int startId, int endId);
 
+// The result of Kruskal's algorithm.
+struct SpanningResult {
+    std::vector<Road> roads;      // the selected roads, shortest first
+    double totalDistance = 0.0;   // sum of the selected road distances in km
+    int components = 0;           // number of separate parts of the network
+    bool connected = false;       // true if the network is one single part
+};
+
+// Kruskal's algorithm: selects existing roads with the smallest total distance
+// that connect all locations, without forming any cycle.
+// - Connected network (1 component): the result is a Minimum Spanning Tree
+//   with (V - 1) roads.
+// - Disconnected network: the result is a Minimum Spanning Forest, one minimum
+//   tree for each part, with (V - components) roads.
+// - Empty city: no roads, 0 components, not connected.
+// Equal road distances are ordered by location IDs, so the result is always
+// the same. Uses a Disjoint Set Union (DSU) to detect cycles.
+// Time: O(E log E + V log V), which is O(E log E) for a connected network
+// (E >= V - 1). Space: O(V + E)
+SpanningResult kruskal(const Graph& city);
+
 #endif // ALGORITHMS_H

@@ -1,7 +1,7 @@
 // Smart City Route & Infrastructure Planner
 // Copyright © 2026 Quad Core. All rights reserved.
 //
-// algorithms.cpp - BFS, DFS and Dijkstra (see algorithms.h).
+// algorithms.cpp - BFS, DFS, Dijkstra and Kruskal (see algorithms.h).
 
 #include "algorithms.h"
 
@@ -156,5 +156,99 @@ RouteResult dijkstra(const Graph& city, int startId, int endId)
 
     result.found = true;
     result.distance = dist[endId];
+    return result;
+}
+
+// ===== Kruskal's minimum spanning tree =====
+
+// Disjoint Set Union (DSU), also called Union-Find.
+// It remembers which locations are already joined by the roads selected so
+// far. Locations that are joined form a group; each group has one "root"
+// location that represents the whole group.
+struct DisjointSet {
+    map<int, int> parent;   // parent[id]: the next location on the way to the root
+    map<int, int> rank;     // rank[root]: roughly the height of the root's tree
+
+    // Puts a location in a group of its own.
+    void makeSet(int id)
+    {
+        parent[id] = id;
+        rank[id] = 0;
+    }
+
+    // Returns the root of the group that `id` belongs to.
+    // Path compression: every location on the way is linked directly to the
+    // root, so the next search for it is much faster.
+    int findRoot(int id)
+    {
+        if (parent[id] != id) {
+            parent[id] = findRoot(parent[id]);
+        }
+        return parent[id];
+    }
+
+    // Joins the groups of `a` and `b`. Returns false if they are already in
+    // the same group (then a road between them would make a cycle).
+    // Union by rank: the lower tree is attached under the higher tree, so the
+    // trees stay short.
+    bool unite(int a, int b)
+    {
+        int rootA = findRoot(a);
+        int rootB = findRoot(b);
+        if (rootA == rootB) {
+            return false;
+        }
+        if (rank[rootA] < rank[rootB]) {
+            parent[rootA] = rootB;
+        } else if (rank[rootA] > rank[rootB]) {
+            parent[rootB] = rootA;
+        } else {
+            parent[rootB] = rootA;
+            rank[rootA]++;
+        }
+        return true;
+    }
+};
+
+// Sorting rule for roads: shorter roads first. Roads with the same distance
+// are ordered by their location IDs, so Kruskal always gives the same result.
+static bool isShorterRoad(const Road& a, const Road& b)
+{
+    if (a.distance != b.distance) {
+        return a.distance < b.distance;
+    }
+    if (a.from != b.from) {
+        return a.from < b.from;
+    }
+    return a.to < b.to;
+}
+
+SpanningResult kruskal(const Graph& city)
+{
+    SpanningResult result;
+
+    // At the start, every location is a separate group (component).
+    DisjointSet groups;
+    for (int id : city.getLocationIds()) {
+        groups.makeSet(id);
+    }
+    result.components = city.locationCount();
+
+    // All roads, each one only once (getRoads() lists A-B but not B-A),
+    // sorted from the shortest to the longest.
+    vector<Road> roads = city.getRoads();
+    sort(roads.begin(), roads.end(), isShorterRoad);
+
+    for (const Road& road : roads) {
+        // A road is selected only if it joins two DIFFERENT groups.
+        // If both ends are already in the same group, it would make a cycle.
+        if (groups.unite(road.from, road.to)) {
+            result.roads.push_back(road);
+            result.totalDistance += road.distance;
+            result.components--;   // two groups became one
+        }
+    }
+
+    result.connected = (result.components == 1);
     return result;
 }

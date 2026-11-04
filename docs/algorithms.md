@@ -286,7 +286,138 @@ Following the parents back: 4 → 2 → 3 → 1, reversed: **1 → 3 → 2 → 4
 
 ## 5. Kruskal's Minimum Spanning Tree
 
-*To be written in milestone S5.*
+**Problem:** which roads should we keep so that **every location is still
+connected**, using the **smallest total road distance**? For example: which
+roads should be maintained first if the city can only afford to maintain a
+minimum network?
+
+**Spanning tree:** a set of roads that connects all V locations without any
+cycle (loop). It always has exactly **V − 1** roads. A **Minimum Spanning Tree
+(MST)** is the spanning tree with the smallest total distance.
+
+**Idea:** Kruskal looks at the roads from **shortest to longest** and keeps a
+road only if it joins two locations that are **not yet connected** by the roads
+already kept. A road between two locations that are already connected would
+create a cycle, so it is skipped. Kruskal only chooses from the **existing**
+roads; it never creates new ones.
+
+**Why sorting is needed:** taking the shortest useful road first is what makes
+the total as small as possible (a greedy choice that is proven to be correct
+for this problem). Without sorting, a long road might be kept while a shorter
+road that does the same job is skipped.
+
+**Steps:**
+
+```
+Kruskal(city):
+    put every location in a group of its own (DSU)
+    components = number of locations
+    sort all roads by distance (shortest first)
+
+    for each road (a, b) in sorted order:
+        if a and b are in different groups:
+            keep the road and add its distance to the total
+            join the two groups
+            components = components - 1
+        else:
+            skip the road (it would make a cycle)
+
+    connected = (components == 1)
+```
+
+### Disjoint Set Union (DSU)
+
+To check quickly whether two locations are already connected, Kruskal uses a
+**Disjoint Set Union** (also called Union-Find). Every group of connected
+locations has one **root** location that represents it.
+
+| Operation | Meaning |
+|---|---|
+| `makeSet(id)` | put a location in a group of its own (it is its own root) |
+| `findRoot(id)` | follow the parent links to the root of the group |
+| `unite(a, b)` | join the two groups; returns `false` if `a` and `b` already have the same root |
+
+**How DSU prevents cycles:** two locations have the same root exactly when the
+roads already kept connect them. A road between them would close a loop, so
+`unite()` returns `false` and Kruskal skips the road.
+
+Two simple improvements keep `findRoot` fast:
+
+- **Path compression:** after finding the root, every location on the way is
+  linked directly to the root, so the next search is shorter.
+- **Union by rank:** when two groups are joined, the shorter tree is placed
+  under the taller tree, so the trees stay flat.
+
+**Data structures:** `vector<Road>` (all roads, from `getRoads()`, which lists
+each two-way road only once), `map<int, int> parent` and `map<int, int> rank`
+(the DSU), and `SpanningResult { roads, totalDistance, components, connected }`
+(the answer returned to the menu).
+
+**Complexity:** sorting the E roads takes **O(E log E)**. Each DSU operation is
+almost constant time with path compression and union by rank (the `map` adds a
+O(log V) lookup), and putting the V locations into the DSU takes O(V log V).
+In total Kruskal takes **O(E log E + V log V)** time, which simplifies to
+**O(E log E)** for a connected network (where E ≥ V − 1), and **O(V + E)**
+extra memory.
+
+**Example** (the test network used in `tests.cpp`):
+
+```
+    1 --(1)-- 2            roads: 1-2 1 km, 2-3 2 km, 1-3 3 km,
+    |       / |                   3-4 4 km, 2-4 5 km
+   (3)   (2) (5)
+    |   /     |
+    3 --(4)-- 4
+```
+
+| Road (sorted) | Groups before | Decision | Groups after |
+|---|---|---|---|
+| 1-2 (1 km) | {1} {2} {3} {4} | keep | {1, 2} {3} {4} |
+| 2-3 (2 km) | {1, 2} {3} {4} | keep | {1, 2, 3} {4} |
+| 1-3 (3 km) | {1, 2, 3} {4} | **skip**: 1 and 3 are already connected | unchanged |
+| 3-4 (4 km) | {1, 2, 3} {4} | keep | {1, 2, 3, 4} |
+| 2-4 (5 km) | {1, 2, 3, 4} | **skip**: would make a cycle | unchanged |
+
+Result: roads **1-2, 2-3, 3-4**, total **7 km**, 3 roads (= V − 1), connected.
+
+### Disconnected networks: Minimum Spanning Forest
+
+If some parts of the network are not joined by any road, no set of existing
+roads can connect all locations, so there is **no** spanning tree. Kruskal then
+returns a **Minimum Spanning Forest (MSF)**: one minimum spanning tree for each
+part (component). The number of selected roads is **V − components**.
+
+Example: locations 1, 2, 3 joined by roads 1-2 (1), 2-3 (2), 1-3 (3); locations
+4 and 5 joined by road 4-5 (4); location 6 has no roads. Kruskal selects 1-2,
+2-3 and 4-5 (7 km, 3 roads) and reports **3 components**.
+
+**Special cases:**
+
+- Empty city: no roads, 0 components, not connected.
+- One location: no roads are needed; 1 component, connected.
+- Roads with equal distances: they are sorted by location IDs, so the same
+  roads are always chosen (also after saving and loading).
+
+**MST compared with Dijkstra:** the MST is the cheapest set of roads that keeps
+the whole city connected. It does **not** give the shortest route between two
+particular locations: on the sample data, Dijkstra's shortest route from BUBT
+to Gulshan uses the road BUBT–Mirpur 10, which the MST does not include.
+
+**Where in the code:** `kruskal()`, `DisjointSet` and `isShorterRoad()` in
+`src/algorithms.cpp`; menu option 13 (`showMinimumSpanningTree()` in
+`src/main.cpp`).
+
+## 6. Complexity Summary
+
+| Algorithm | Time | Extra memory | Data structures |
+|---|---|---|---|
+| BFS | O(V + E) | O(V) | queue, set |
+| DFS | O(V + E) | O(V) | recursion, set |
+| Dijkstra | O((V + E) log V) | O(V + E) | min-priority queue, maps |
+| Kruskal | O(E log E + V log V); O(E log E) if connected | O(V + E) | sorted vector, DSU |
+
+(BFS and DFS also sort each neighbour list for a stable order, which adds
+O(E log V) in the worst case.)
 
 ---
 

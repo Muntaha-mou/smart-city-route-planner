@@ -35,6 +35,7 @@ cmake --build build
   10. Traverse network using BFS
   11. Traverse network using DFS
   12. Find shortest route (Dijkstra)
+  13. Minimum Spanning Tree (Kruskal)
 
   0. Exit
 --------------------------------------------------
@@ -196,7 +197,41 @@ See [algorithms.md](algorithms.md) for how Dijkstra's algorithm works.
 
 ## 10. Minimum Spanning Tree (Kruskal)
 
-*To be added in a later milestone.*
+- **Minimum Spanning Tree (13)** needs no input. It selects existing roads that
+  connect all locations with the **smallest total distance**, without any
+  cycle.
+- The program prints each selected road (both locations with names and IDs)
+  and its distance, how many of the city's roads were selected, and the total
+  distance.
+- If the whole network is connected, the result is a **Minimum Spanning Tree**.
+- If the network is in separate parts, no existing roads can join them, so the
+  result is a **Minimum Spanning Forest**: one minimum tree for each part. The
+  program shows how many parts (components) there are.
+- Roads are never created: Kruskal only chooses from the roads that exist.
+- If the city is empty, the program says so.
+
+Example (sample data):
+
+```
+  Minimum Spanning Tree (Kruskal)
+
+  #   Road                                                  Distance
+  --------------------------------------------------------------------
+  1   BUBT [1] <-> Mirpur 1 [3]                             2.00 km
+  2   Mirpur 10 [2] <-> Mirpur 1 [3]                        2.20 km
+  ...
+  9   Airport [9] <-> Gulshan [10]                          7.00 km
+
+  Selected roads: 9 of 14
+  Total distance: 35.20 km
+
+  The network is connected: these roads connect all 10 location(s) with the smallest total distance.
+```
+
+The Minimum Spanning Tree is not the same as the shortest route between two
+locations (option 12): it is the cheapest set of roads that keeps the whole
+city connected. See [algorithms.md](algorithms.md) for how Kruskal's algorithm
+works.
 
 ## 11. Troubleshooting
 

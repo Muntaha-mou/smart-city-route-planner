@@ -12,6 +12,7 @@
 #include "graph.h"
 #include "storage.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <fstream>
@@ -711,6 +712,247 @@ void testDijkstraAfterChanges()
           "after saving and loading, 1 -> 4 is the same route with the same distance");
 }
 
+// ===== S5: Kruskal's minimum spanning tree =====
+
+// Builds a city with the same locations as `city` but only the roads that
+// Kruskal selected.
+Graph buildTreeCity(const Graph& city, const SpanningResult& tree)
+{
+    Graph treeCity;
+    for (int id : city.getLocationIds()) {
+        treeCity.addLocationWithId(id, city.getName(id));
+    }
+    for (const Road& road : tree.roads) {
+        treeCity.addRoad(road.from, road.to, road.distance);
+    }
+    return treeCity;
+}
+
+// Checks that Kruskal's result is a correct spanning forest of `city`:
+//  - every selected road is a real road with the right distance,
+//  - there are exactly (V - components) roads (so there is no cycle),
+//  - the total distance is the sum of the selected roads,
+//  - every location reaches exactly the same locations as in the full city.
+bool isSpanningForest(const Graph& city, const SpanningResult& tree)
+{
+    double total = 0.0;
+    for (const Road& road : tree.roads) {
+        if (!city.hasRoad(road.from, road.to)) {
+            return false;
+        }
+        bool sameDistance = false;
+        for (const Edge& edge : city.getNeighbors(road.from)) {
+            if (edge.to == road.to && edge.distance == road.distance) {
+                sameDistance = true;
+            }
+        }
+        if (!sameDistance) {
+            return false;
+        }
+        total += road.distance;
+    }
+    if (static_cast<int>(tree.roads.size()) != city.locationCount() - tree.components) {
+        return false;
+    }
+    if (!nearlyEqual(total, tree.totalDistance)) {
+        return false;
+    }
+
+    Graph treeCity = buildTreeCity(city, tree);
+    for (int id : city.getLocationIds()) {
+        vector<int> inCity = bfs(city, id);
+        vector<int> inTree = bfs(treeCity, id);
+        sort(inCity.begin(), inCity.end());
+        sort(inTree.begin(), inTree.end());
+        if (inCity != inTree) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// True if the result contains the road between a and b (in either order).
+bool selectsRoad(const SpanningResult& tree, int a, int b)
+{
+    for (const Road& road : tree.roads) {
+        if ((road.from == a && road.to == b) || (road.from == b && road.to == a)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void testKruskalSmallCases()
+{
+    cout << "\nKruskal: small cases\n";
+    Graph empty;
+    SpanningResult none = kruskal(empty);
+    check(none.roads.empty() && none.totalDistance == 0.0, "an empty city selects no roads");
+    check(none.components == 0 && !none.connected, "an empty city has 0 components and is not connected");
+
+    Graph single;
+    single.addLocation("BUBT");
+    SpanningResult one = kruskal(single);
+    check(one.roads.empty() && one.totalDistance == 0.0, "one location: no roads are needed");
+    check(one.components == 1 && one.connected, "one location: 1 component, connected");
+
+    Graph pair;
+    pair.addLocation("BUBT");
+    pair.addLocation("Mirpur 10");
+    pair.addRoad(1, 2, 2.5);
+    SpanningResult two = kruskal(pair);
+    check(two.roads.size() == 1 && selectsRoad(two, 1, 2), "two connected locations: their road is selected");
+    check(nearlyEqual(two.totalDistance, 2.5) && two.components == 1 && two.connected,
+          "two connected locations: 2.5 km, 1 component, connected");
+
+    Graph noRoads;
+    noRoads.addLocation("A");
+    noRoads.addLocation("B");
+    noRoads.addLocation("C");
+    SpanningResult apart = kruskal(noRoads);
+    check(apart.roads.empty() && apart.components == 3 && !apart.connected,
+          "three locations without roads: no roads, 3 components");
+}
+
+void testKruskalConnected()
+{
+    cout << "\nKruskal: connected networks\n";
+
+    // 1-2 (1), 2-3 (2), 1-3 (3), 3-4 (4), 2-4 (5)
+    Graph city;
+    for (int i = 1; i <= 4; i++) {
+        city.addLocation("K" + to_string(i));
+    }
+    city.addRoad(2, 4, 5.0);
+    city.addRoad(1, 3, 3.0);
+    city.addRoad(3, 4, 4.0);
+    city.addRoad(1, 2, 1.0);
+    city.addRoad(2, 3, 2.0);
+    SpanningResult tree = kruskal(city);
+    check(tree.connected && tree.components == 1, "the network is connected (1 component)");
+    check(tree.roads.size() == 3, "a tree of 4 locations has 3 roads (V - 1)");
+    check(nearlyEqual(tree.totalDistance, 7.0), "the minimum total distance is 1 + 2 + 4 = 7 km");
+    check(selectsRoad(tree, 1, 2) && selectsRoad(tree, 2, 3) && selectsRoad(tree, 3, 4),
+          "roads 1-2, 2-3 and 3-4 are selected");
+    check(!selectsRoad(tree, 1, 3) && !selectsRoad(tree, 2, 4),
+          "roads 1-3 and 2-4 are skipped (each would make a cycle)");
+    check(tree.roads[0].distance <= tree.roads[1].distance &&
+          tree.roads[1].distance <= tree.roads[2].distance, "the roads are listed shortest first");
+    check(isSpanningForest(city, tree), "the result is a valid spanning tree of the city");
+
+    // The three shortest roads form a triangle (a cycle). Taking the 3
+    // shortest roads would be wrong: DSU must skip one of them.
+    Graph triangle;
+    for (int i = 1; i <= 4; i++) {
+        triangle.addLocation("T" + to_string(i));
+    }
+    triangle.addRoad(1, 2, 1.0);
+    triangle.addRoad(2, 3, 1.0);
+    triangle.addRoad(1, 3, 1.0);
+    triangle.addRoad(3, 4, 10.0);
+    SpanningResult triangleTree = kruskal(triangle);
+    check(triangleTree.roads.size() == 3 && nearlyEqual(triangleTree.totalDistance, 12.0),
+          "triangle + long road: 3 roads, 1 + 1 + 10 = 12 km");
+    check(selectsRoad(triangleTree, 3, 4), "the long road 3-4 is needed to reach location 4");
+    check(!selectsRoad(triangleTree, 2, 3), "one triangle road (2-3) is skipped to avoid a cycle");
+    check(isSpanningForest(triangle, triangleTree), "the triangle result is a valid spanning tree");
+
+    // Decimal distances.
+    Graph decimals;
+    decimals.addLocation("A");
+    decimals.addLocation("B");
+    decimals.addLocation("C");
+    decimals.addRoad(1, 2, 1.1);
+    decimals.addRoad(2, 3, 2.2);
+    decimals.addRoad(1, 3, 3.4);
+    SpanningResult decimalTree = kruskal(decimals);
+    check(nearlyEqual(decimalTree.totalDistance, 3.3), "decimal distances: 1.1 + 2.2 = 3.3 km");
+}
+
+void testKruskalDisconnected()
+{
+    cout << "\nKruskal: disconnected networks (Minimum Spanning Forest)\n";
+
+    // Part A: 1-2 (1), 2-3 (2), 1-3 (3)   Part B: 4-5 (4)   Part C: 6 alone
+    Graph city;
+    for (int i = 1; i <= 6; i++) {
+        city.addLocation("F" + to_string(i));
+    }
+    city.addRoad(1, 2, 1.0);
+    city.addRoad(2, 3, 2.0);
+    city.addRoad(1, 3, 3.0);
+    city.addRoad(4, 5, 4.0);
+    SpanningResult forest = kruskal(city);
+    check(!forest.connected && forest.components == 3, "the network has 3 components and is not connected");
+    check(forest.roads.size() == 3, "the forest has 3 roads (V - components = 6 - 3)");
+    check(nearlyEqual(forest.totalDistance, 7.0), "the forest total is 1 + 2 + 4 = 7 km");
+    check(selectsRoad(forest, 4, 5) && !selectsRoad(forest, 1, 3),
+          "road 4-5 is selected and road 1-3 is skipped");
+    check(isSpanningForest(city, forest), "the result is a valid spanning forest");
+
+    city.addRoad(3, 4, 9.0);   // joins part A and part B
+    SpanningResult joined = kruskal(city);
+    check(joined.components == 2 && joined.roads.size() == 4 && nearlyEqual(joined.totalDistance, 16.0),
+          "after adding road 3-4: 2 components, 4 roads, 16 km");
+
+    city.addRoad(6, 1, 0.5);   // joins location 6 as well
+    SpanningResult tree = kruskal(city);
+    check(tree.connected && tree.roads.size() == 5 && nearlyEqual(tree.totalDistance, 16.5),
+          "after adding road 6-1: connected, 5 roads, 16.5 km");
+}
+
+void testKruskalEqualDistances()
+{
+    cout << "\nKruskal: equal distances and changes\n";
+
+    // A square with one diagonal, all roads 1 km, added in a mixed-up order.
+    // Sorted by (distance, from, to): 1-2, 1-3, 1-4, 2-3, 3-4.
+    Graph square;
+    for (int i = 1; i <= 4; i++) {
+        square.addLocation("Q" + to_string(i));
+    }
+    square.addRoad(3, 4, 1.0);
+    square.addRoad(2, 3, 1.0);
+    square.addRoad(1, 4, 1.0);
+    square.addRoad(1, 3, 1.0);
+    square.addRoad(1, 2, 1.0);
+    SpanningResult tree = kruskal(square);
+    check(tree.roads.size() == 3 && nearlyEqual(tree.totalDistance, 3.0), "all roads equal: 3 roads, 3 km");
+    check(selectsRoad(tree, 1, 2) && selectsRoad(tree, 1, 3) && selectsRoad(tree, 1, 4),
+          "with equal distances, the roads with smaller IDs are chosen (1-2, 1-3, 1-4)");
+    check(isSpanningForest(square, tree), "the equal-distance result is a valid spanning tree");
+
+    // Same result after saving and loading.
+    check(saveCity(square, TEST_LOCATIONS, TEST_ROADS, TEST_NEXT_ID), "the square city is saved");
+    Graph loaded;
+    vector<string> messages;
+    loadCity(loaded, TEST_LOCATIONS, TEST_ROADS, TEST_NEXT_ID, messages);
+    SpanningResult loadedTree = kruskal(loaded);
+    bool sameRoads = loadedTree.roads.size() == tree.roads.size();
+    for (size_t i = 0; sameRoads && i < tree.roads.size(); i++) {
+        sameRoads = loadedTree.roads[i].from == tree.roads[i].from &&
+                    loadedTree.roads[i].to == tree.roads[i].to;
+    }
+    check(sameRoads, "after saving and loading, the same roads are selected in the same order");
+
+    // Changes to the city change the result.
+    square.updateRoad(1, 3, 5.0);   // the diagonal becomes long
+    SpanningResult afterUpdate = kruskal(square);
+    check(!selectsRoad(afterUpdate, 1, 3) && nearlyEqual(afterUpdate.totalDistance, 3.0),
+          "after the diagonal 1-3 becomes 5 km, it is not selected (still 3 km)");
+
+    square.removeRoad(1, 2);
+    square.removeRoad(1, 4);   // now 1 is only reachable through the diagonal
+    SpanningResult afterDelete = kruskal(square);
+    check(selectsRoad(afterDelete, 1, 3) && nearlyEqual(afterDelete.totalDistance, 7.0),
+          "after deleting roads 1-2 and 1-4, the diagonal is needed (5 + 1 + 1 = 7 km)");
+
+    square.removeLocation(3);   // removes 1-3, 2-3 and 3-4
+    SpanningResult afterRemove = kruskal(square);
+    check(afterRemove.roads.empty() && afterRemove.components == 3,
+          "after deleting location 3: no roads left, 3 components");
+}
+
 int main()
 {
     testLocations();
@@ -734,6 +976,10 @@ int main()
     testDijkstraBasics();
     testDijkstraRoutes();
     testDijkstraAfterChanges();
+    testKruskalSmallCases();
+    testKruskalConnected();
+    testKruskalDisconnected();
+    testKruskalEqualDistances();
 
     cout << "\n" << passed << " passed, " << failed << " failed\n";
 

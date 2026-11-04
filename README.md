@@ -1,15 +1,16 @@
 # Smart City Route & Infrastructure Planner
 
 A C++17 command-line program that models a city road network as a weighted
-graph. Later milestones add graph algorithms to explore the network, find
-shortest routes and plan a minimum road network.
+graph and uses graph algorithms to explore the network, find shortest routes
+and plan a minimum road network.
 
 **Team:** Quad Core
 **Course:** CSE 232 — Algorithms project
 
-> **Status:** Milestone S4 — locations and roads can be added, shown, updated
+> **Status:** Milestone S5 — locations and roads can be added, shown, updated
 > and deleted, the city is saved to CSV files, the network can be explored with
-> BFS and DFS, and the shortest route is found with Dijkstra's algorithm.
+> BFS and DFS, the shortest route is found with Dijkstra's algorithm, and the
+> minimum road network is found with Kruskal's algorithm.
 
 ## Features
 
@@ -23,7 +24,7 @@ shortest routes and plan a minimum road network.
 | Save and load data (CSV files) | Done (S2) |
 | Explore the network with BFS and DFS | Done (S3) |
 | Shortest route with Dijkstra's algorithm | Done (S4) |
-| Minimum spanning tree with Kruskal's algorithm | Planned |
+| Minimum spanning tree with Kruskal's algorithm | Done (S5) |
 
 ## Project Structure
 
@@ -31,12 +32,12 @@ shortest routes and plan a minimum road network.
 CMakeLists.txt      Build instructions for CMake
 include/graph.h     Edge and Road structs, Graph class (declarations)
 include/storage.h   Saving and loading the city (declarations)
-include/algorithms.h  Graph algorithms: BFS, DFS, Dijkstra (declarations)
+include/algorithms.h  Graph algorithms: BFS, DFS, Dijkstra, Kruskal (declarations)
 src/graph.cpp       Graph functions (the city data)
 src/storage.cpp     CSV save and load
-src/algorithms.cpp  BFS, DFS and Dijkstra
+src/algorithms.cpp  BFS, DFS, Dijkstra and Kruskal
 src/main.cpp        Menu program: input, output and menu options
-tests/tests.cpp     Automatic checks for the Graph, saving/loading, BFS, DFS, Dijkstra
+tests/tests.cpp     Automatic checks for the Graph, saving/loading and all algorithms
 data/sample/        Illustrative sample data (10 Dhaka locations, 14 roads)
 docs/               Project documentation
 future-gui/         Qt 6 GUI prototype (not built; kept for a later version)
