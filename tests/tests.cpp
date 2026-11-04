@@ -531,6 +531,186 @@ void testTraversalAfterChanges()
           "BFS and DFS give the same order after saving and loading");
 }
 
+// ===== S4: Dijkstra's shortest route =====
+
+// Compares two decimal numbers (sums such as 1.1 + 2.2 can differ very
+// slightly from 3.3, so exact == is not safe for them).
+bool nearlyEqual(double a, double b)
+{
+    return fabs(a - b) < 1e-9;
+}
+
+// True if `path` is a real route in the city whose road distances add up to
+// `distance`: every two neighbouring IDs on the path must be joined by a road.
+bool isValidRoute(const Graph& city, const vector<int>& path, double distance)
+{
+    double total = 0.0;
+    for (size_t i = 0; i + 1 < path.size(); i++) {
+        bool roadFound = false;
+        for (const Edge& edge : city.getNeighbors(path[i])) {
+            if (edge.to == path[i + 1]) {
+                total += edge.distance;
+                roadFound = true;
+            }
+        }
+        if (!roadFound) {
+            return false;
+        }
+    }
+    return nearlyEqual(total, distance);
+}
+
+// The test network for Dijkstra (distances in km):
+//
+//         4
+//    1 ------- 2           5 (no roads)
+//    |  \      |
+//    1    2    1           roads: 1-2 4, 1-3 1, 3-2 2, 2-4 1, 3-4 5
+//    |      \  |
+//    3 ------- 4   (3-4 is 5 km)
+//
+Graph makeRouteCity()
+{
+    Graph city;
+    for (int i = 1; i <= 5; i++) {
+        city.addLocation("R" + to_string(i));   // IDs 1 to 5
+    }
+    city.addRoad(1, 2, 4.0);
+    city.addRoad(1, 3, 1.0);
+    city.addRoad(3, 2, 2.0);
+    city.addRoad(2, 4, 1.0);
+    city.addRoad(3, 4, 5.0);
+    return city;
+}
+
+void testDijkstraBasics()
+{
+    cout << "\nDijkstra: special cases\n";
+    Graph empty;
+    check(!dijkstra(empty, 1, 2).found, "an empty city has no route");
+
+    Graph single;
+    single.addLocation("BUBT");
+    RouteResult same = dijkstra(single, 1, 1);
+    check(same.found && same.distance == 0.0 && same.path == vector<int>{1},
+          "one location: the route from 1 to 1 is just {1} with distance 0");
+    check(!dijkstra(single, 1, 2).found, "one location: a route to an unknown ID is not found");
+
+    Graph city = makeRouteCity();
+    RouteResult self = dijkstra(city, 3, 3);
+    check(self.found && self.distance == 0.0 && self.path == vector<int>{3},
+          "start = destination gives distance 0 and the route {3}");
+
+    check(!dijkstra(city, 99, 1).found, "an unknown start ID gives no route");
+    check(!dijkstra(city, 1, 99).found, "an unknown destination ID gives no route");
+    check(!dijkstra(city, 0, -1).found, "IDs 0 and -1 give no route");
+    RouteResult invalid = dijkstra(city, 99, 1);
+    check(invalid.path.empty() && invalid.distance == 0.0, "a route that is not found has an empty path");
+
+    RouteResult none = dijkstra(city, 1, 5);
+    check(!none.found && none.path.empty(), "no route to the unconnected location 5");
+    check(!dijkstra(city, 5, 2).found, "no route from the unconnected location 5");
+}
+
+void testDijkstraRoutes()
+{
+    cout << "\nDijkstra: shortest routes\n";
+    Graph city = makeRouteCity();
+
+    RouteResult direct = dijkstra(city, 1, 3);
+    check(direct.found && nearlyEqual(direct.distance, 1.0) && direct.path == vector<int>({1, 3}),
+          "1 -> 3 uses the direct road: {1, 3}, 1 km");
+
+    RouteResult indirect = dijkstra(city, 1, 2);
+    check(nearlyEqual(indirect.distance, 3.0), "1 -> 2 is 3 km, shorter than the direct 4 km road");
+    check(indirect.path == vector<int>({1, 3, 2}), "1 -> 2 goes through 3: {1, 3, 2}");
+
+    RouteResult longRoute = dijkstra(city, 1, 4);
+    check(nearlyEqual(longRoute.distance, 4.0), "1 -> 4 is 4 km");
+    check(longRoute.path == vector<int>({1, 3, 2, 4}),
+          "1 -> 4 uses 3 roads {1, 3, 2, 4} instead of a 2-road route (5 or 6 km)");
+    check(isValidRoute(city, longRoute.path, longRoute.distance),
+          "the route 1 -> 4 is made of real roads that add up to 4 km");
+
+    RouteResult backwards = dijkstra(city, 4, 1);
+    check(nearlyEqual(backwards.distance, 4.0) && backwards.path == vector<int>({4, 2, 3, 1}),
+          "4 -> 1 is the same route backwards: {4, 2, 3, 1}, 4 km");
+
+    RouteResult fromThree = dijkstra(city, 3, 4);
+    check(nearlyEqual(fromThree.distance, 3.0) && fromThree.path == vector<int>({3, 2, 4}),
+          "3 -> 4 is 3 km through 2, not the direct 5 km road");
+
+    // Several equally short routes: 1-2-4 and 1-3-4 are both 2 km.
+    // Roads are added in a mixed-up order on purpose.
+    Graph square;
+    for (int i = 1; i <= 4; i++) {
+        square.addLocation("S" + to_string(i));
+    }
+    square.addRoad(3, 4, 1.0);
+    square.addRoad(1, 3, 1.0);
+    square.addRoad(2, 4, 1.0);
+    square.addRoad(1, 2, 1.0);
+    RouteResult tie = dijkstra(square, 1, 4);
+    check(nearlyEqual(tie.distance, 2.0) && tie.path.size() == 3,
+          "two equally short routes: the distance is 2 km with 2 roads");
+    check(isValidRoute(square, tie.path, tie.distance), "the chosen route is made of real roads");
+    check(tie.path == vector<int>({1, 2, 4}), "with a tie, the route through the smaller ID (2) is chosen");
+
+    // Decimal distances add up correctly.
+    Graph decimals;
+    decimals.addLocation("A");
+    decimals.addLocation("B");
+    decimals.addLocation("C");
+    decimals.addRoad(1, 2, 1.1);
+    decimals.addRoad(2, 3, 2.2);
+    decimals.addRoad(1, 3, 3.4);
+    RouteResult sum = dijkstra(decimals, 1, 3);
+    check(nearlyEqual(sum.distance, 3.3) && sum.path == vector<int>({1, 2, 3}),
+          "1.1 + 2.2 = 3.3 km beats the direct 3.4 km road");
+}
+
+void testDijkstraAfterChanges()
+{
+    cout << "\nDijkstra after changing the city\n";
+    Graph city = makeRouteCity();
+
+    city.updateRoad(1, 3, 10.0);   // 1-3 becomes long: the direct road 1-2 wins
+    RouteResult afterUpdate = dijkstra(city, 1, 2);
+    check(nearlyEqual(afterUpdate.distance, 4.0) && afterUpdate.path == vector<int>({1, 2}),
+          "after 1-3 becomes 10 km, 1 -> 2 uses the direct 4 km road");
+
+    city.removeRoad(1, 2);   // now 1 can only leave through 3
+    RouteResult afterDelete = dijkstra(city, 1, 2);
+    check(nearlyEqual(afterDelete.distance, 12.0) && afterDelete.path == vector<int>({1, 3, 2}),
+          "after deleting road 1-2, 1 -> 2 is 12 km through 3");
+
+    city.addRoad(1, 5, 1.0);
+    city.addRoad(5, 4, 1.0);   // a new short way: 1-5-4-2
+    RouteResult afterAdd = dijkstra(city, 1, 2);
+    check(nearlyEqual(afterAdd.distance, 3.0) && afterAdd.path == vector<int>({1, 5, 4, 2}),
+          "after adding roads 1-5 and 5-4, 1 -> 2 is 3 km through 5 and 4");
+
+    city.removeLocation(5);   // removes roads 1-5 and 5-4
+    RouteResult afterRemove = dijkstra(city, 1, 2);
+    check(nearlyEqual(afterRemove.distance, 12.0) && afterRemove.path == vector<int>({1, 3, 2}),
+          "after deleting location 5, 1 -> 2 is 12 km through 3 again");
+    check(!dijkstra(city, 1, 5).found, "there is no route to the deleted location 5");
+
+    city.removeLocation(3);   // 1 now has no roads at all
+    check(!dijkstra(city, 1, 2).found, "after deleting location 3, location 1 is cut off");
+
+    // The same results after saving and loading.
+    Graph original = makeRouteCity();
+    check(saveCity(original, TEST_LOCATIONS, TEST_ROADS, TEST_NEXT_ID), "the route city is saved");
+    Graph loaded;
+    vector<string> messages;
+    loadCity(loaded, TEST_LOCATIONS, TEST_ROADS, TEST_NEXT_ID, messages);
+    RouteResult before = dijkstra(original, 1, 4);
+    RouteResult after = dijkstra(loaded, 1, 4);
+    check(after.found && after.path == before.path && nearlyEqual(after.distance, before.distance),
+          "after saving and loading, 1 -> 4 is the same route with the same distance");
+}
+
 int main()
 {
     testLocations();
@@ -551,6 +731,9 @@ int main()
     testBfs();
     testDfs();
     testTraversalAfterChanges();
+    testDijkstraBasics();
+    testDijkstraRoutes();
+    testDijkstraAfterChanges();
 
     cout << "\n" << passed << " passed, " << failed << " failed\n";
 

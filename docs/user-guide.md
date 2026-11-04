@@ -34,6 +34,7 @@ cmake --build build
   9. Show city network
   10. Traverse network using BFS
   11. Traverse network using DFS
+  12. Find shortest route (Dijkstra)
 
   0. Exit
 --------------------------------------------------
@@ -165,7 +166,33 @@ See [algorithms.md](algorithms.md) for how BFS and DFS work.
 
 ## 9. Finding the Shortest Route (Dijkstra)
 
-*To be added in a later milestone.*
+- **Find shortest route (12)** shows the locations, then asks for the **start
+  location ID** and the **destination location ID**.
+- The program prints the shortest route with names and IDs, each road on the
+  route with its distance, and the **total distance** in km.
+- "Shortest" means the smallest **total distance**, not the fewest roads. A
+  route through several short roads can be shorter than one long direct road.
+- If the start and destination are the same, the route is just that location
+  and the distance is 0 km.
+- If the two locations are in different parts of the network, the program
+  prints `No route exists between these locations.`
+- An ID that does not exist gives an error message.
+
+Example (sample data, from BUBT to Gulshan):
+
+```
+  Shortest Route:
+  BUBT [1] -> Mirpur 10 [2] -> Agargaon [4] -> Farmgate [5] -> Gulshan [10]
+
+    BUBT                   -> Mirpur 10                 2.50 km
+    Mirpur 10              -> Agargaon                  4.50 km
+    Agargaon               -> Farmgate                  3.00 km
+    Farmgate               -> Gulshan                   5.00 km
+
+  Total Distance: 15.00 km  (4 road(s))
+```
+
+See [algorithms.md](algorithms.md) for how Dijkstra's algorithm works.
 
 ## 10. Minimum Spanning Tree (Kruskal)
 

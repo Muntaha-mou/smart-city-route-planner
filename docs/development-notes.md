@@ -59,9 +59,9 @@ so run them from a terminal where the MinGW `bin` folder is on the PATH.
 | `include/graph.h` | `Edge` and `Road` structs, `Graph` class declaration | No |
 | `src/graph.cpp` | The code of the `Graph` functions | No |
 | `include/storage.h`, `src/storage.cpp` | `saveCity()` and `loadCity()`: CSV files | No (returns messages instead) |
-| `include/algorithms.h`, `src/algorithms.cpp` | `bfs()` and `dfs()` (later also Dijkstra and Kruskal) | No |
+| `include/algorithms.h`, `src/algorithms.cpp` | `bfs()`, `dfs()` and `dijkstra()` (later also Kruskal) | No |
 | `src/main.cpp` | Input functions, one function per menu option, `main()` | Yes |
-| `tests/tests.cpp` | Automatic checks for `Graph`, saving/loading, BFS and DFS | Prints PASS/FAIL |
+| `tests/tests.cpp` | Automatic checks for `Graph`, saving/loading, BFS, DFS and Dijkstra | Prints PASS/FAIL |
 
 **Main rule:** `graph.cpp`, `storage.cpp` and `algorithms.cpp` never print and
 never read the keyboard. They only store data and return answers.
@@ -127,6 +127,7 @@ Functions marked `const` only *read* the graph; they never change it.
 | `bfs(city, startId)` | Breadth-First Search with a `queue`. Returns the IDs in visiting order, or an empty list if the start does not exist. A location is marked visited when it is **added** to the queue, so it is never added twice. |
 | `dfs(city, startId)` | Depth-First Search. Calls `dfsVisit()`, which visits a location and then calls itself for each unvisited neighbour (recursion); returning from the call is the backtracking step. |
 | `sortedNeighborIds(city, id)` | The neighbour IDs of a location, sorted. Both algorithms use it, so the visiting order is always the same for the same city. |
+| `dijkstra(city, startId, endId)` | Shortest route by total distance. Uses `map<int, double> dist`, `map<int, int> parent` and a min-priority queue of (distance, ID) pairs (`priority_queue` with `greater<>`). Outdated queue entries are skipped; the search stops when the destination leaves the queue. The route is rebuilt by following `parent` back from the destination and reversing. Returns a `RouteResult { found, distance, path }`. |
 
 See `docs/algorithms.md` for step-by-step explanations and examples.
 
@@ -147,6 +148,7 @@ See `docs/algorithms.md` for step-by-step explanations and examples.
 | `isValidName(city, name, ownId)` | The name rules shared by add and rename (not empty, no comma, not used by another location). |
 | `saveChanges(city)` | Called after every successful change; saves the city and prints `(Saved)` or a warning. |
 | `traverseNetwork(city, useBfs)` | Options 10 and 11. Asks for a start ID, runs `bfs()` or `dfs()`, prints the visiting order with names and IDs, how many locations were reached, and the locations that are not reachable. |
+| `findShortestRoute(city)` | Option 12. Asks for a start and a destination ID, runs `dijkstra()`, and prints the route (names and IDs), each road with its distance (`roadDistance()`), and the total distance, or "No route exists between these locations." |
 | `main()` | Creates the `Graph`, loads the saved city (showing any notes), shows the menu in a loop, and calls the function for the chosen option until the user chooses 0. |
 
 The menu functions check the user's input and explain any problem; `Graph`
@@ -162,7 +164,12 @@ file with 16 invalid lines, files without a header, an impossible save folder,
 and ID persistence after deleting and restarting); and BFS and DFS (empty city,
 unknown start, single location, known visiting orders on a network with a
 cycle, disconnected parts, each location visited once, and the same result
-after changes and after saving/loading). The save/load tests write temporary
+after changes and after saving/loading); and Dijkstra (empty city, single
+location, same start and destination, unknown IDs, unreachable locations,
+direct and indirect routes, a longer direct road versus a shorter route with
+more roads, equally short routes, decimal distances, route reconstruction
+checked against the real roads, and results after adding, updating and
+deleting roads and locations, and after saving/loading). The save/load tests write temporary
 files into a `test_data` folder. `main()` returns 1 if anything failed, so `ctest` reports
 the failure.
 
@@ -200,6 +207,9 @@ the failure.
 | 2026-11-04 | Deleting a location asks for confirmation (y/n) | It also deletes all its roads |
 | 2026-11-04 | BFS and DFS visit neighbours in increasing ID order | Roads are stored in the order they were added, which changes after saving and loading; sorting gives the same, testable result every time |
 | 2026-11-04 | DFS uses recursion | Shortest and clearest code for students; the city networks in this project are small |
+| 2026-11-04 | Dijkstra uses `priority_queue` with `greater<>` and skips outdated entries | Standard C++ min-priority queue; no extra data structure needed to update priorities |
+| 2026-11-04 | Dijkstra replaces a parent only for a strictly shorter distance | With equally short routes, the same route is always chosen (also after saving and loading) |
+| 2026-11-04 | Dijkstra returns a `RouteResult` struct (found, distance, path) | The menu (and a future GUI) can show the result without the algorithm printing anything |
 
 ## 6. Milestones
 
@@ -208,8 +218,8 @@ the failure.
 | M1 | Project foundation (CMake, Qt prototype) | Done (`78f875e`) |
 | S1 | Add/show locations and roads, city network display, plain console menu, tests | Done (`6f76f77`) |
 | S2 | Rename/delete locations, update/delete roads, CSV save/load, sample data | Done (`c3fc761`) |
-| S3 | BFS and DFS | In review |
-| S4 | Dijkstra's shortest route | Planned |
+| S3 | BFS and DFS | Done (`f416196`) |
+| S4 | Dijkstra's shortest route | In review |
 | S5 | Kruskal's minimum spanning tree | Planned |
 | S6 | Final tests, documentation, Pull Request to `master` | Planned |
 

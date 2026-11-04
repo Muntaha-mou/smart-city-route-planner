@@ -184,7 +184,105 @@ neighbours of a location in increasing ID order (`sortedNeighborIds()`).
 
 ## 4. Dijkstra's Shortest Path
 
-*To be written in milestone S4.*
+**Problem:** what is the shortest route (smallest total distance in km) from a
+start location to a destination?
+
+**Important:** Dijkstra finds the route with the smallest **total distance**,
+not the route with the fewest roads. A route with three short roads can be
+shorter than a route with one long road. (BFS finds the route with the fewest
+roads, because it ignores distances.)
+
+**Idea:** Dijkstra keeps, for every location, the shortest distance found so far
+from the start. It repeatedly takes the **unfinished location with the
+smallest distance**; that distance is now final, because all roads are
+positive, so no later detour can make it shorter. From that location it checks
+each road: if going through it gives a neighbour a shorter distance, the
+neighbour's distance and **parent** (the location before it) are updated. This
+check is called **relaxing** a road.
+
+A **min-priority queue** gives the location with the smallest distance quickly.
+
+**Steps:**
+
+```
+Dijkstra(start, destination):
+    dist[every location] = infinity
+    dist[start] = 0
+    put (0, start) in the priority queue
+
+    while the queue is not empty:
+        (d, current) = take the pair with the smallest distance
+        if d > dist[current]: skip it (an outdated entry)
+        if current == destination: stop (its distance is final)
+        for each road from current to neighbour with length w:
+            if dist[current] + w < dist[neighbour]:
+                dist[neighbour] = dist[current] + w
+                parent[neighbour] = current
+                put (dist[neighbour], neighbour) in the queue
+
+    if dist[destination] is still infinity: there is no route
+    otherwise: follow parent[] back from the destination to the start,
+               then reverse that list to get the route
+```
+
+**Data structures:**
+
+| Name | Type | Meaning |
+|---|---|---|
+| `dist` | `map<int, double>` | shortest distance found so far for each location |
+| `parent` | `map<int, int>` | the location before each one on its shortest route |
+| `toVisit` | `priority_queue<pair<double, int>, ..., greater<...>>` | (distance, location) pairs; `greater` makes the **smallest** distance come out first |
+| `RouteResult` | `struct { bool found; double distance; vector<int> path; }` | the answer returned to the menu |
+
+**Why it needs positive distances:** once a location is taken from the queue,
+Dijkstra never changes its distance again. With a negative road, a later detour
+could still make it shorter, so the answer could be wrong. Our graph only allows
+distances greater than 0.
+
+**Complexity:** each road can add one entry to the priority queue, and each
+queue operation takes O(log V). Dijkstra therefore takes **O((V + E) log V)**
+time and **O(V + E)** extra memory (the maps and the queue). The `map` lookups
+also take O(log V) each, which keeps the same total.
+
+**Example** (the test network used in `tests.cpp`):
+
+```
+         4
+    1 ------- 2           roads: 1-2 4 km, 1-3 1 km, 3-2 2 km,
+    |  \      |                  2-4 1 km, 3-4 5 km
+    1    2    1
+    |      \  |
+    3 ------- 4   (3-4 is 5 km)
+```
+
+Shortest route from 1 to 4:
+
+| Step | Take from queue | Final distance | Updates |
+|---|---|---|---|
+| 1 | 1 | 0 | 2 = 4 (via 1), 3 = 1 (via 1) |
+| 2 | 3 | 1 | 2 = 3 (via 3, shorter than 4), 4 = 6 (via 3) |
+| 3 | 2 | 3 | 4 = 4 (via 2, shorter than 6) |
+| 4 | 2 (old entry with distance 4) | — | skipped: 2 already has the shorter distance 3 |
+| 5 | 4 | 4 | destination reached: stop |
+
+Step 4 shows why outdated entries are skipped: when location 2 got the shorter
+distance 3, its old entry (distance 4) stayed in the queue.
+
+Following the parents back: 4 → 2 → 3 → 1, reversed: **1 → 3 → 2 → 4, total
+4 km**. This route uses 3 roads, while the routes 1 → 2 → 4 (5 km) and
+1 → 3 → 4 (6 km) use only 2 roads but are longer.
+
+**Special cases:**
+
+- Start and destination are the same: distance 0, route = just the start.
+- Unknown start or destination ID, or no road connection between them: no
+  route (`found` is `false`).
+- Several equally short routes: a parent is only replaced by a **strictly**
+  shorter distance, and equal distances leave the queue in increasing ID
+  order, so the same route is always chosen (also after saving and loading).
+
+**Where in the code:** `dijkstra()` in `src/algorithms.cpp`; menu option 12
+(`findShortestRoute()` in `src/main.cpp`).
 
 ## 5. Kruskal's Minimum Spanning Tree
 

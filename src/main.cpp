@@ -410,6 +410,74 @@ void traverseNetwork(const Graph& city, bool useBfs)
     }
 }
 
+// ===== Shortest route (Dijkstra) =====
+
+// Returns the distance of the road between two neighbouring locations.
+double roadDistance(const Graph& city, int from, int to)
+{
+    for (const Edge& edge : city.getNeighbors(from)) {
+        if (edge.to == to) {
+            return edge.distance;
+        }
+    }
+    return 0.0;   // not reached for roads on a route found by Dijkstra
+}
+
+// Option 12: find the shortest route between two locations.
+void findShortestRoute(const Graph& city)
+{
+    if (city.locationCount() == 0) {
+        cout << "  The network is empty. Add some locations first.\n";
+        return;
+    }
+
+    showLocations(city);
+    cout << "\n";
+    int start = readInt("Start location ID: ");
+    if (!city.hasLocation(start)) {
+        cout << "  Error: location " << start << " does not exist.\n";
+        return;
+    }
+    int destination = readInt("Destination location ID: ");
+    if (!city.hasLocation(destination)) {
+        cout << "  Error: location " << destination << " does not exist.\n";
+        return;
+    }
+
+    RouteResult route = dijkstra(city, start, destination);
+    if (!route.found) {
+        cout << "\n  No route exists between these locations.\n";
+        cout << "  (" << city.getName(start) << " and " << city.getName(destination)
+             << " are in different parts of the network.)\n";
+        return;
+    }
+
+    // The route on one line, e.g.  BUBT [1] -> Mirpur 10 [2] -> Agargaon [4]
+    cout << "\n  Shortest Route:\n  ";
+    for (size_t i = 0; i < route.path.size(); i++) {
+        if (i > 0) {
+            cout << " -> ";
+        }
+        cout << city.getName(route.path[i]) << " [" << route.path[i] << "]";
+    }
+    cout << "\n";
+
+    // Each road of the route with its own distance.
+    if (route.path.size() > 1) {
+        cout << "\n";
+        for (size_t i = 0; i + 1 < route.path.size(); i++) {
+            int from = route.path[i];
+            int to = route.path[i + 1];
+            cout << "    " << left << setw(22) << city.getName(from) << " -> "
+                 << setw(22) << city.getName(to) << right << setw(8)
+                 << roadDistance(city, from, to) << " km\n";
+        }
+    }
+
+    cout << "\n  Total Distance: " << route.distance << " km  ("
+         << route.path.size() - 1 << " road(s))\n";
+}
+
 // ===== Main program =====
 
 void showMenu(const Graph& city)
@@ -427,6 +495,7 @@ void showMenu(const Graph& city)
     cout << "  9. Show city network\n";
     cout << "  10. Traverse network using BFS\n";
     cout << "  11. Traverse network using DFS\n";
+    cout << "  12. Find shortest route (Dijkstra)\n";
     cout << "\n";
     cout << "  0. Exit\n";
     cout << "--------------------------------------------------\n";
@@ -480,6 +549,8 @@ int main()
             traverseNetwork(city, true);
         } else if (choice == 11) {
             traverseNetwork(city, false);
+        } else if (choice == 12) {
+            findShortestRoute(city);
         } else if (choice == 0) {
             cout << "Goodbye!\n";
             break;
