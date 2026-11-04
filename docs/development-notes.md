@@ -9,16 +9,26 @@ workflow and the decisions made during development.
 
 ## 1. Toolchain (verified)
 
-| Tool | Version | Location used by the team lead |
+Current toolchain of the team lead (Windows 10/11):
+
+| Tool | Version | Notes |
 |---|---|---|
-| GCC (MinGW-w64, 64-bit) | 15.1.0 | `S:\Qt\Tools\mingw1510_64\bin` |
-| CMake | 3.30.5 | `S:\Qt\Tools\CMake_64\bin` |
-| Ninja | 1.12.1 | `S:\Qt\Tools\Ninja` |
+| GCC (WinLibs standalone MinGW-w64) | 16.2.0 | Target `x86_64-w64-mingw32`; installed in `S:\mingw64\bin` |
+| CMake | 4.4.4 | Found on the PATH (`S:\mingw64\bin`) |
+| Build generator | MinGW Makefiles | Uses `mingw32-make` from the MinGW `bin` folder |
+| Ninja | optional | Another generator that can be used instead of MinGW Makefiles |
+| Terminal | Command Prompt (CMD) | PowerShell also works (see section 2) |
 | C++ standard | C++17 | set in `CMakeLists.txt` |
 
-These tools were installed with the Qt Online Installer, but the CLI version of
-the project does **not** use the Qt library. Any MinGW-w64 GCC with C++17
-support and CMake 3.21 or newer will work. Ninja is optional (see below).
+The `S:\mingw64\bin` folder is on the Windows System PATH, so `g++`, `cmake`
+and `mingw32-make` work in any new terminal. The console program does **not**
+need Qt, Qt Creator or MSYS2. Any MinGW-w64 GCC with C++17 support and
+CMake 3.21 or newer will work.
+
+**Earlier toolchain:** milestones M1 to S6.3 were built and tested with GCC
+15.1.0, CMake 3.30.5 and Ninja 1.12.1 from the Qt Online Installer (in
+`S:\Qt\Tools`). That installation has since been removed; the project builds
+and passes all tests with the current toolchain above.
 
 ### If the build or the program is blocked by Windows
 
@@ -34,22 +44,26 @@ If you see them, ask the team lead or your lab administrator for help.
 
 ## 2. Build, Test and Run
 
-PowerShell, from the project folder:
+**Command Prompt (CMD)**, from the project folder (the normal way):
 
-```powershell
-$env:PATH = "S:\Qt\Tools\mingw1510_64\bin;S:\Qt\Tools\CMake_64\bin;S:\Qt\Tools\Ninja;$env:PATH"
-cmake -S . -B build -G Ninja
-cmake --build build
-ctest --test-dir build --output-on-failure
-.\build\SmartCityPlanner.exe
+```cmd
+cd /d "P:\BUBT\1-4\CSE 232\smart-city-route-planner"
+cmake -S . -B build-mingw -G "MinGW Makefiles"
+cmake --build build-mingw
+ctest --test-dir build-mingw --output-on-failure
+build-mingw\SmartCityPlanner.exe
 ```
 
-Replace `S:\Qt\Tools\...` with the location of your own compiler, CMake and Ninja.
-To start again from a clean state, delete the `build` folder.
+Replace the `cd /d` path with your own project folder. The configure command
+(`cmake -S ...`) is needed only once; after changing code, run
+`cmake --build build-mingw` again. To start again from a clean state, delete
+the `build-mingw` folder. The README describes every step, including how to
+copy the sample data safely.
 
-Without Ninja, configure with `cmake -S . -B build -G "MinGW Makefiles"`
-(uses `mingw32-make` from the MinGW `bin` folder); the other commands are the
-same. Delete the `build` folder before switching generators.
+**Ninja (optional):** configure a separate build folder with Ninja instead,
+for example `cmake -S . -B build -G Ninja`, then use `build` in the other
+commands. A build folder can only use one generator; delete it before
+switching. In PowerShell, start the program with `.\build\SmartCityPlanner.exe`.
 
 The program and tests use the MinGW runtime DLLs (for example `libstdc++-6.dll`),
 so run them from a terminal where the MinGW `bin` folder is on the PATH.
@@ -208,6 +222,7 @@ the failure.
 | Date | Decision | Reason |
 |---|---|---|
 | 2026-11-04 | Use the GCC 15.1.0 / CMake / Ninja toolchain from the Qt installer | Verified working on Windows 11 |
+| 2026-11-04 | Switch to standalone WinLibs MinGW-w64 (GCC 16.2.0, CMake 4.4.4) with MinGW Makefiles in CMD; Qt uninstalled | The console program does not need Qt; one folder contains the compiler, CMake and `mingw32-make` |
 | 2026-11-04 | Develop as a CLI application first; Qt GUI later | Simpler for a beginner team; focus on algorithms |
 | 2026-11-04 | Keep the Qt prototype in `future-gui/`, outside the build | Preserved for the later GUI |
 | 2026-11-04 | Simplified design with separate `include/` and `src/` folders | Every team member must understand and explain all the code |

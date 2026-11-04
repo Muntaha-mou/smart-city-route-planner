@@ -71,22 +71,137 @@ again after every change:
 - These working files are not stored in Git (see `.gitignore`).
 
 **Sample data:** to start with the sample network, copy the three sample files
-into the `data` folder before starting the program:
+into the `data` folder before starting the program. In PowerShell:
 
 ```powershell
 Copy-Item data\sample\* data\
 ```
 
+This **replaces** any working files already in `data`. To copy only the
+missing files in CMD, see step 5 of
+[Windows: Build and Run (CMD)](#windows-build-and-run-cmd).
+
 The sample distances are **illustrative values**, not measured distances.
 
 ## Requirements (Windows 10/11)
 
-- MinGW-w64 GCC with C++17 support (tested with GCC 15.1.0)
-- CMake 3.21 or newer (tested with 3.30.5)
-- Ninja (optional; tested with 1.12.1). Without Ninja, use MinGW Makefiles
-  (`mingw32-make`, included with MinGW-w64).
+- MinGW-w64 GCC with C++17 support (currently tested with WinLibs GCC 16.2.0)
+- CMake 3.21 or newer (currently tested with 4.4.4)
+- MinGW Makefiles (`mingw32-make`, included with MinGW-w64): the main build
+  method
+- Ninja (optional): another build generator that can be used instead
+- Git (optional, only needed to clone the repository)
 
-## Build, Test and Run
+(Earlier milestones were built with GCC 15.1.0, CMake 3.30.5 and Ninja 1.12.1;
+see [docs/development-notes.md](docs/development-notes.md).)
+
+The program is a console application: Qt is **not** needed. It has been built
+and tested on Windows only.
+
+There are two ways to build, described below: **Command Prompt (CMD)** with
+MinGW Makefiles, or **PowerShell** with Ninja. Both create the same program.
+
+## Windows: Build and Run (CMD)
+
+All commands in this section are for the Windows **Command Prompt** (`cmd.exe`).
+
+### 1. Prerequisites
+
+Install MinGW-w64 GCC and CMake, and add their `bin` folders to the Windows
+PATH. Git is optional. Open a **new** Command Prompt and check that both tools
+are found:
+
+```cmd
+g++ --version
+cmake --version
+```
+
+Each command should print a version number. If you see "is not recognized as
+an internal or external command", the tool is not on the PATH.
+
+### 2. Go to the project folder
+
+```cmd
+cd /d "P:\BUBT\1-4\CSE 232\smart-city-route-planner"
+```
+
+Replace the path with the folder where the project is on your PC. The `/d`
+option lets `cd` change the drive (for example from `C:` to `P:`) and the
+folder in one step. Keep the quotes, because the path contains spaces.
+
+### 3. Configure the project (once)
+
+```cmd
+cmake -S . -B build-mingw -G "MinGW Makefiles"
+```
+
+This reads `CMakeLists.txt` and prepares the build files in the `build-mingw`
+folder. (Build folders are not stored in Git.)
+
+### 4. Build the project
+
+```cmd
+cmake --build build-mingw
+```
+
+This compiles the program to `build-mingw\SmartCityPlanner.exe` (and the test
+program to `build-mingw\tests.exe`).
+
+### 5. Prepare the sample data (first run only)
+
+The program reads and saves its data in the `data` folder (`locations.csv`,
+`roads.csv` and `next_id.txt`). Sample files are provided in `data\sample`.
+These commands copy each sample file **only if** the working file does not
+exist yet, so your own saved data is never overwritten:
+
+```cmd
+if not exist data mkdir data
+if not exist data\locations.csv copy data\sample\locations.csv data\locations.csv
+if not exist data\roads.csv copy data\sample\roads.csv data\roads.csv
+if not exist data\next_id.txt copy data\sample\next_id.txt data\next_id.txt
+```
+
+This step is optional: without these files, the program starts with an empty
+city.
+
+### 6. Run the program
+
+```cmd
+build-mingw\SmartCityPlanner.exe
+```
+
+Always start the program from the **project folder** (the folder that contains
+`data`), because it opens the data files with paths relative to the current
+folder. Choose `0` in the menu to exit.
+
+### 7. Run the automated tests
+
+```cmd
+ctest --test-dir build-mingw --output-on-failure
+```
+
+If everything works, the output looks like this (the times will differ):
+
+```
+1/1 Test #1: tests ............................   Passed    0.04 sec
+
+100% tests passed out of 1
+```
+
+CTest runs one test program (`tests.exe`) that performs all the checks, so
+"out of 1" is expected. If any check fails, the test is marked **Failed** and
+`--output-on-failure` shows every check with **PASS** or **FAIL**.
+
+### 8. Rebuild after changing the code
+
+You do not need to configure again. Build and run:
+
+```cmd
+cmake --build build-mingw
+build-mingw\SmartCityPlanner.exe
+```
+
+## Windows: Build, Test and Run (PowerShell, Ninja)
 
 Open **PowerShell** in the project folder:
 
@@ -102,7 +217,7 @@ ctest --test-dir build --output-on-failure   # run the tests
 ```
 
 **Without Ninja:** configure with MinGW Makefiles instead; the other commands
-stay the same.
+stay the same. (In CMD, follow the section above.)
 
 ```powershell
 cmake -S . -B build -G "MinGW Makefiles"

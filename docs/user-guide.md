@@ -2,25 +2,59 @@
 
 Smart City Route & Infrastructure Planner — Team Quad Core
 
-This guide explains how to build, start and use the program. Sections are
-completed as features are added.
+This guide explains how to build, start and use the program.
 
 ---
 
 ## 1. Building and Starting the Program
 
-In PowerShell, from the project folder:
+You need MinGW-w64 GCC (with C++17 support) and CMake on the Windows PATH.
+Qt is not needed. The commands below are for the Windows **Command Prompt
+(CMD)**.
 
-```powershell
-# Example folders: use the locations of the compiler, CMake and Ninja on your PC.
-$env:PATH = "C:\mingw64\bin;C:\Program Files\CMake\bin;C:\Ninja;$env:PATH"
-cmake -S . -B build -G Ninja
-cmake --build build
-.\build\SmartCityPlanner.exe
+**1. Go to the project folder.** Replace the path with the folder where the
+project is on your PC (`/d` also changes the drive):
+
+```cmd
+cd /d "P:\BUBT\1-4\CSE 232\smart-city-route-planner"
 ```
 
-Ninja is optional: without it, use `cmake -S . -B build -G "MinGW Makefiles"`
-as the second command (see the README).
+**2. Configure (only the first time) and build:**
+
+```cmd
+cmake -S . -B build-mingw -G "MinGW Makefiles"
+cmake --build build-mingw
+```
+
+The program is created as `build-mingw\SmartCityPlanner.exe`. After changing
+the code, run only `cmake --build build-mingw` again.
+
+**3. Copy the sample data (optional, first run only).** Each file is copied
+only if it does not exist yet, so your saved data is never overwritten:
+
+```cmd
+if not exist data mkdir data
+if not exist data\locations.csv copy data\sample\locations.csv data\locations.csv
+if not exist data\roads.csv copy data\sample\roads.csv data\roads.csv
+if not exist data\next_id.txt copy data\sample\next_id.txt data\next_id.txt
+```
+
+**4. Start the program** from the project folder (the folder that contains
+`data`), because the program finds its data files from the current folder:
+
+```cmd
+build-mingw\SmartCityPlanner.exe
+```
+
+**5. Run the automated tests (optional):**
+
+```cmd
+ctest --test-dir build-mingw --output-on-failure
+```
+
+A successful run ends with `100% tests passed out of 1`.
+
+To build with PowerShell or with the optional Ninja generator, see the README.
 
 ## 2. Main Menu
 
@@ -129,7 +163,9 @@ locations it is directly connected to, with the road distances.
   ID + 1" and shows a note.
 
 To start with the illustrative sample network (10 Dhaka locations, 14 roads),
-copy the three sample files before starting the program:
+copy the three sample files before starting the program, as shown in step 3 of
+section 1 (CMD; existing files are kept). In PowerShell, this command copies
+them too, but it **replaces** any working files already in `data`:
 
 ```powershell
 Copy-Item data\sample\* data\
@@ -244,6 +280,7 @@ works.
 
 | Problem | Solution |
 |---|---|
+| "'g++' (or 'cmake') is not recognized as an internal or external command" | Add the MinGW `bin` folder (and CMake) to the Windows PATH, then open a new terminal |
 | "libstdc++-6.dll was not found" | Start the program from a terminal where the MinGW `bin` folder is on the PATH |
 | The saved city is not loaded | Start the program from the project folder (the folder that contains `data`) |
 | "Warning: the data could not be saved" | Check that the `data` folder and the CSV files are not read-only or open in another program |
