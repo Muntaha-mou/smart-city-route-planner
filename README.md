@@ -7,10 +7,11 @@ and plan a minimum road network.
 **Team:** Quad Core
 **Course:** CSE 232 — Algorithms project
 
-> **Status:** Milestone S5 — locations and roads can be added, shown, updated
-> and deleted, the city is saved to CSV files, the network can be explored with
-> BFS and DFS, the shortest route is found with Dijkstra's algorithm, and the
-> minimum road network is found with Kruskal's algorithm.
+> **Status:** Milestone S6 (final review) — all planned features are complete:
+> locations and roads can be added, shown, updated and deleted, the city is
+> saved to CSV files, the network can be explored with BFS and DFS, the shortest
+> route is found with Dijkstra's algorithm, and the minimum road network is found
+> with Kruskal's algorithm.
 
 ## Features
 
@@ -82,21 +83,33 @@ The sample distances are **illustrative values**, not measured distances.
 
 - MinGW-w64 GCC with C++17 support (tested with GCC 15.1.0)
 - CMake 3.21 or newer (tested with 3.30.5)
-- Ninja (tested with 1.12.1)
+- Ninja (optional; tested with 1.12.1). Without Ninja, use MinGW Makefiles
+  (`mingw32-make`, included with MinGW-w64).
 
 ## Build, Test and Run
 
 Open **PowerShell** in the project folder:
 
 ```powershell
-# Put the compiler, CMake and Ninja on the PATH (adjust to your install location)
-$env:PATH = "S:\Qt\Tools\mingw1510_64\bin;S:\Qt\Tools\CMake_64\bin;S:\Qt\Tools\Ninja;$env:PATH"
+# Put the compiler, CMake and Ninja on the PATH.
+# The folders below are examples: use the locations on your own PC.
+$env:PATH = "C:\mingw64\bin;C:\Program Files\CMake\bin;C:\Ninja;$env:PATH"
 
 cmake -S . -B build -G Ninja                 # configure (once)
 cmake --build build                          # build
 ctest --test-dir build --output-on-failure   # run the tests
 .\build\SmartCityPlanner.exe                 # start the program (from the project folder)
 ```
+
+**Without Ninja:** configure with MinGW Makefiles instead; the other commands
+stay the same.
+
+```powershell
+cmake -S . -B build -G "MinGW Makefiles"
+```
+
+A `build` folder can only use one generator. To switch, delete the `build`
+folder first.
 
 The program needs the MinGW runtime DLLs, so start it from a terminal where the
 compiler folder is on the PATH (as above).
@@ -108,8 +121,8 @@ compiler folder is on the PATH (as above).
 | [docs/algorithms.md](docs/algorithms.md) | The graph data structure and the algorithms |
 | [docs/user-guide.md](docs/user-guide.md) | How to use the program |
 | [docs/development-notes.md](docs/development-notes.md) | Toolchain, code walkthrough, Git workflow, decisions |
-| `docs/project-proposal.pdf` | Official project proposal *(to be added)* |
-| `docs/project-report.pdf` | Official project report *(to be added)* |
+| Project proposal | Official project proposal *(to be added before submission)* |
+| Project report | Official project report *(to be added before submission)* |
 
 ---
 

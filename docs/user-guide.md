@@ -12,11 +12,15 @@ completed as features are added.
 In PowerShell, from the project folder:
 
 ```powershell
-$env:PATH = "S:\Qt\Tools\mingw1510_64\bin;S:\Qt\Tools\CMake_64\bin;S:\Qt\Tools\Ninja;$env:PATH"
+# Example folders: use the locations of the compiler, CMake and Ninja on your PC.
+$env:PATH = "C:\mingw64\bin;C:\Program Files\CMake\bin;C:\Ninja;$env:PATH"
 cmake -S . -B build -G Ninja
 cmake --build build
 .\build\SmartCityPlanner.exe
 ```
+
+Ninja is optional: without it, use `cmake -S . -B build -G "MinGW Makefiles"`
+as the second command (see the README).
 
 ## 2. Main Menu
 

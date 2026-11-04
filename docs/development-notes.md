@@ -18,7 +18,7 @@ workflow and the decisions made during development.
 
 These tools were installed with the Qt Online Installer, but the CLI version of
 the project does **not** use the Qt library. Any MinGW-w64 GCC with C++17
-support, CMake 3.21 or newer and Ninja will work.
+support and CMake 3.21 or newer will work. Ninja is optional (see below).
 
 ### If the build or the program is blocked by Windows
 
@@ -46,6 +46,10 @@ ctest --test-dir build --output-on-failure
 
 Replace `S:\Qt\Tools\...` with the location of your own compiler, CMake and Ninja.
 To start again from a clean state, delete the `build` folder.
+
+Without Ninja, configure with `cmake -S . -B build -G "MinGW Makefiles"`
+(uses `mingw32-make` from the MinGW `bin` folder); the other commands are the
+same. Delete the `build` folder before switching generators.
 
 The program and tests use the MinGW runtime DLLs (for example `libstdc++-6.dll`),
 so run them from a terminal where the MinGW `bin` folder is on the PATH.
@@ -150,7 +154,7 @@ See `docs/algorithms.md` for step-by-step explanations and examples.
 | `showNetwork(city)` | Prints the adjacency list: each location, then the locations it connects to. |
 | `renameLocation(city)`, `deleteLocation(city)` | Ask for a location ID (and a new name, or a y/n confirmation), check it, then call the `Graph` function. |
 | `updateRoad(city)`, `deleteRoad(city)` | Show the roads, ask for the road's two location IDs (`readExistingRoad`), then call the `Graph` function. |
-| `isValidName(city, name, ownId)` | The name rules shared by add and rename (not empty, no comma, not used by another location). |
+| `isValidName(city, name, ownId)` | The name rules shared by add and rename (not empty, no comma, not used by another location, ignoring upper/lower case). The name is trimmed before this check. |
 | `saveChanges(city)` | Called after every successful change; saves the city and prints `(Saved)` or a warning. |
 | `traverseNetwork(city, useBfs)` | Options 10 and 11. Asks for a start ID, runs `bfs()` or `dfs()`, prints the visiting order with names and IDs, how many locations were reached, and the locations that are not reachable. |
 | `findShortestRoute(city)` | Option 12. Asks for a start and a destination ID, runs `dijkstra()`, and prints the route (names and IDs), each road with its distance (`roadDistance()`), and the total distance, or "No route exists between these locations." |
@@ -182,7 +186,11 @@ disconnected networks giving a forest with the right number of components,
 equal distances, decimal distances, changes to the city, and saving/loading).
 Every Kruskal result is also checked with `isSpanningForest()`: real roads,
 exactly V − components roads, the correct total, and the same connected parts
-as the full city. The save/load tests write temporary files into a `test_data`
+as the full city. The S6.2 tests check name trimming and case-insensitive
+duplicates (adding, renaming and loading), the 10,000 km distance limit
+(0, negative, infinity, NaN, exactly 10,000 and above), and Dijkstra and
+Kruskal with the largest allowed distances. The save/load tests write
+temporary files into a `test_data`
 folder. `main()` returns 1 if anything failed, so `ctest` reports
 the failure.
 
@@ -238,8 +246,9 @@ the failure.
 | S2 | Rename/delete locations, update/delete roads, CSV save/load, sample data | Done (`c3fc761`) |
 | S3 | BFS and DFS | Done (`f416196`) |
 | S4 | Dijkstra's shortest route | Done (`85f59c7`) |
-| S5 | Kruskal's minimum spanning tree | In review |
-| S6 | Final tests, documentation, Pull Request to `master` | Planned |
+| S5 | Kruskal's minimum spanning tree | Done (`99fa2e4`) |
+| S6.2 | Name rules (trimmed, case-insensitive) and 10,000 km road distance limit | Done (`7bcae7a`) |
+| S6 | Final tests, documentation, Pull Request to `master` | In progress |
 
 ---
 
