@@ -34,3 +34,9 @@ Desktop.ini
 *.tmp
 *.bak
 reports/
+
+# Working data created by the program (sample data is in data/sample/)
+data/locations.csv
+data/roads.csv
+data/next_id.txt
+test_data/

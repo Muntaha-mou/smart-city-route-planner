@@ -52,6 +52,12 @@ most of them empty.
 | Add road | Check the rules, add an `Edge` to both lists | O(log V + deg) |
 | Check if a road exists | Scan one location's list | O(log V + deg) |
 | List all roads | Visit every list, keep each road once (`from < to`) | O(V + E) |
+| Rename location | Check the name is not used, then replace it | O(V) |
+| Update road distance | Find the road in both lists and change both copies | O(log V + deg) |
+| Delete road | Remove the road from both lists | O(log V + deg) |
+| Delete location | For each of its roads, remove the copy in the neighbour's list; then erase the location | O(deg × deg′) where deg′ is the largest neighbour degree |
+| Save to CSV | Write every location and every road once | O(V + E) |
+| Load from CSV | Read each line, check it, add it | O(V² + E·deg) in the worst case, because each line is checked for duplicates |
 
 ## 2. Breadth-First Search (BFS)
 

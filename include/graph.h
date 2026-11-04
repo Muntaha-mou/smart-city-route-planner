@@ -35,14 +35,36 @@ public:
     // ----- Locations -----
 
     // Adds a location and returns its new ID (1, 2, 3, ...).
-    // Returns -1 if the name is empty or already used.
+    // Returns -1 if the name is empty (or only spaces) or already used.
     int addLocation(const std::string& name);
+
+    // Adds a location with a given ID. Used when loading saved data, so that
+    // IDs stay the same and saved roads still point to the right locations.
+    // Returns false if the ID is not positive or already used, or the name
+    // is empty or already used.
+    bool addLocationWithId(int id, const std::string& name);
+
+    // Changes a location's name. Returns false if the location does not exist,
+    // or the new name is empty or used by another location.
+    bool renameLocation(int id, const std::string& newName);
+
+    // Deletes a location and every road connected to it.
+    // Returns false if the location does not exist.
+    bool removeLocation(int id);
 
     bool hasLocation(int id) const;
     bool nameExists(const std::string& name) const;
     std::string getName(int id) const;          // "" if the ID does not exist
     std::vector<int> getLocationIds() const;    // all IDs in increasing order
     int locationCount() const;
+
+    // The ID that the next new location will get. It only ever increases, so
+    // the ID of a deleted location is never given to another location.
+    int getNextId() const;
+
+    // Used when loading saved data. Raises the next ID to `id`; a value lower
+    // than the current next ID is ignored, so an ID can never be reused.
+    void setNextId(int id);
 
     // ----- Roads -----
 
@@ -53,12 +75,23 @@ public:
     //   - a road between these two locations already exists
     bool addRoad(int from, int to, double distance);
 
+    // Changes the distance of an existing road (in both directions).
+    // Returns false if the road does not exist or the distance is not positive.
+    bool updateRoad(int from, int to, double distance);
+
+    // Deletes an existing road (in both directions).
+    // Returns false if the road does not exist.
+    bool removeRoad(int from, int to);
+
     bool hasRoad(int from, int to) const;
     std::vector<Edge> getNeighbors(int id) const;   // roads starting at this location
     std::vector<Road> getRoads() const;             // every road once
     int roadCount() const;
 
 private:
+    // Removes the road to `to` from the road list of `from` (one direction only).
+    void removeEdge(int from, int to);
+
     std::map<int, std::string> names;            // location ID -> name
     std::map<int, std::vector<Edge>> adjacency;  // location ID -> its roads
     int nextId = 1;                              // ID for the next new location

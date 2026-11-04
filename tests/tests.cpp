@@ -9,8 +9,11 @@
 // reports the test as failed.
 
 #include "graph.h"
+#include "storage.h"
 
 #include <cmath>
+#include <cstdio>
+#include <fstream>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -95,10 +98,341 @@ void testRoads()
     check(city.getNeighbors(99).empty(), "an unknown location has no neighbours");
 }
 
+// ===== S2: update and delete =====
+
+// A small city used by several tests:
+//   1 BUBT - 2 Mirpur 10 (2.5 km), 2 Mirpur 10 - 3 Farmgate (4.0 km),
+//   1 BUBT - 3 Farmgate (6.0 km), 4 Uttara has no roads.
+Graph makeSmallCity()
+{
+    Graph city;
+    city.addLocation("BUBT");        // ID 1
+    city.addLocation("Mirpur 10");   // ID 2
+    city.addLocation("Farmgate");    // ID 3
+    city.addLocation("Uttara");      // ID 4
+    city.addRoad(1, 2, 2.5);
+    city.addRoad(2, 3, 4.0);
+    city.addRoad(1, 3, 6.0);
+    return city;
+}
+
+void testRenameLocation()
+{
+    cout << "\nRename location\n";
+    Graph city = makeSmallCity();
+
+    check(city.renameLocation(1, "BUBT Campus"), "rename BUBT to BUBT Campus");
+    check(city.getName(1) == "BUBT Campus", "the new name is stored");
+    check(!city.nameExists("BUBT"), "the old name is gone");
+    check(city.renameLocation(1, "BUBT Campus"), "keeping the same name is allowed");
+    check(!city.renameLocation(1, "Farmgate"), "a name used by another location is refused");
+    check(!city.renameLocation(1, ""), "an empty name is refused");
+    check(!city.renameLocation(99, "Nowhere"), "renaming an unknown location is refused");
+    check(city.getName(1) == "BUBT Campus", "refused renames change nothing");
+    check(city.getNeighbors(1).size() == 2, "roads are not affected by renaming");
+}
+
+void testRemoveLocation()
+{
+    cout << "\nDelete location\n";
+    Graph city = makeSmallCity();
+
+    check(city.removeLocation(2), "delete Mirpur 10 (ID 2)");
+    check(!city.hasLocation(2), "location 2 no longer exists");
+    check(city.locationCount() == 3, "3 locations remain");
+    check(!city.hasRoad(1, 2) && !city.hasRoad(2, 1), "road BUBT - Mirpur 10 is gone");
+    check(!city.hasRoad(3, 2), "road Farmgate - Mirpur 10 is gone from Farmgate's list");
+    check(city.hasRoad(1, 3), "the unrelated road BUBT - Farmgate is kept");
+    check(city.roadCount() == 1, "only 1 road remains");
+    check(city.getNeighbors(1).size() == 1, "BUBT now has 1 neighbour");
+    check(city.getNeighbors(3).size() == 1, "Farmgate now has 1 neighbour");
+
+    check(!city.removeLocation(2), "deleting it again is refused");
+    check(!city.removeLocation(99), "deleting an unknown location is refused");
+    check(city.removeLocation(4), "a location without roads can be deleted");
+
+    check(city.addLocation("Gulshan") == 5, "a new location gets a new ID (5), not a deleted one");
+    check(city.addLocation("Mirpur 10") == 6, "the deleted name can be used again");
+}
+
+void testUpdateRoad()
+{
+    cout << "\nUpdate road\n";
+    Graph city = makeSmallCity();
+
+    check(city.updateRoad(1, 2, 3.5), "change BUBT - Mirpur 10 to 3.5 km");
+    check(city.getNeighbors(1)[0].distance == 3.5, "the new distance is stored at BUBT");
+    check(city.getNeighbors(2)[0].distance == 3.5, "the new distance is stored at Mirpur 10 too");
+    check(city.updateRoad(2, 1, 1.5), "the road can also be updated in reverse order");
+    check(city.getRoads()[0].distance == 1.5, "getRoads shows the updated distance");
+
+    check(!city.updateRoad(1, 4, 2.0), "updating a road that does not exist is refused");
+    check(!city.updateRoad(1, 2, 0.0), "distance 0 is refused");
+    check(!city.updateRoad(1, 2, -3.0), "negative distance is refused");
+    check(!city.updateRoad(1, 2, INFINITY), "infinite distance is refused");
+    check(!city.updateRoad(1, 2, NAN), "NaN distance is refused");
+    check(city.getRoads()[0].distance == 1.5, "refused updates change nothing");
+    check(city.roadCount() == 3, "the number of roads is unchanged");
+}
+
+void testRemoveRoad()
+{
+    cout << "\nDelete road\n";
+    Graph city = makeSmallCity();
+
+    check(city.removeRoad(2, 1), "delete BUBT - Mirpur 10 (given in reverse order)");
+    check(!city.hasRoad(1, 2) && !city.hasRoad(2, 1), "the road is gone in both directions");
+    check(city.roadCount() == 2, "2 roads remain");
+    check(city.hasLocation(1) && city.hasLocation(2), "both locations still exist");
+    check(!city.removeRoad(1, 2), "deleting it again is refused");
+    check(!city.removeRoad(1, 4), "deleting a road that does not exist is refused");
+    check(city.addRoad(1, 2, 5.0), "the road can be added again");
+}
+
+void testAddLocationWithId()
+{
+    cout << "\nAdd location with a given ID (used when loading)\n";
+    Graph city;
+
+    check(city.addLocationWithId(5, "Gulshan"), "add Gulshan with ID 5");
+    check(city.addLocationWithId(2, "Agargaon"), "add Agargaon with ID 2");
+    check(!city.addLocationWithId(5, "Banani"), "an ID that is already used is refused");
+    check(!city.addLocationWithId(7, "Gulshan"), "a name that is already used is refused");
+    check(!city.addLocationWithId(0, "Banani"), "ID 0 is refused");
+    check(!city.addLocationWithId(-1, "Banani"), "a negative ID is refused");
+    check(!city.addLocationWithId(8, ""), "an empty name is refused");
+    check(!city.addLocationWithId(8, "   "), "a name of only spaces is refused");
+    check(city.addLocation("Banani") == 6, "the next new location gets ID 6 (after the highest ID)");
+}
+
+void testNextId()
+{
+    cout << "\nNext location ID\n";
+    Graph city;
+    check(city.getNextId() == 1, "a new graph starts with next ID 1");
+    city.addLocation("BUBT");
+    check(city.getNextId() == 2, "after one location the next ID is 2");
+
+    city.setNextId(10);
+    check(city.getNextId() == 10, "setNextId can raise the next ID to 10");
+    city.setNextId(4);
+    check(city.getNextId() == 10, "setNextId cannot lower the next ID");
+    check(city.addLocation("Uttara") == 10, "the next location gets ID 10");
+    check(city.addLocation("\t ") == -1, "a name of only spaces and tabs is refused");
+}
+
+// ===== S2: saving and loading =====
+
+const string TEST_LOCATIONS = "test_data/locations.csv";
+const string TEST_ROADS = "test_data/roads.csv";
+const string TEST_NEXT_ID = "test_data/next_id.txt";
+
+// Writes text into a file (used to create test CSV files).
+void writeFile(const string& file, const string& text)
+{
+    ofstream output(file);
+    output << text;
+}
+
+void testSaveAndLoadEmpty()
+{
+    cout << "\nSave and load an empty city\n";
+    Graph empty;
+    check(saveCity(empty, TEST_LOCATIONS, TEST_ROADS, TEST_NEXT_ID), "an empty city is saved");
+
+    Graph loaded;
+    vector<string> messages;
+    loadCity(loaded, TEST_LOCATIONS, TEST_ROADS, TEST_NEXT_ID, messages);
+    check(loaded.locationCount() == 0, "no locations are loaded");
+    check(loaded.roadCount() == 0, "no roads are loaded");
+    check(messages.empty(), "there are no warnings");
+
+    // '<', '>' and '|' are not allowed in Windows folder names.
+    bool saved = saveCity(empty, "test_data/bad<|>/locations.csv", "test_data/bad<|>/roads.csv",
+                          "test_data/bad<|>/next_id.txt");
+    check(!saved, "saving to an impossible folder returns false (and does not crash)");
+}
+
+void testSaveAndLoadCity()
+{
+    cout << "\nSave and load a city\n";
+    Graph city = makeSmallCity();
+    city.removeLocation(2);              // leaves IDs 1, 3 and 4 (a gap at 2)
+    city.addLocation("Gulshan");         // ID 5
+    city.addRoad(3, 5, 7.25);
+    check(saveCity(city, TEST_LOCATIONS, TEST_ROADS, TEST_NEXT_ID), "the city is saved");
+
+    Graph loaded;
+    vector<string> messages;
+    loadCity(loaded, TEST_LOCATIONS, TEST_ROADS, TEST_NEXT_ID, messages);
+    check(messages.empty(), "there are no warnings");
+    check(loaded.locationCount() == 4, "4 locations are loaded");
+    check(loaded.roadCount() == 2, "2 roads are loaded");
+
+    vector<int> ids = loaded.getLocationIds();
+    check(ids.size() == 4 && ids[0] == 1 && ids[1] == 3 && ids[2] == 4 && ids[3] == 5,
+          "location IDs are kept exactly (1, 3, 4, 5)");
+    check(loaded.getName(5) == "Gulshan", "names are kept (ID 5 is Gulshan)");
+    check(loaded.hasRoad(1, 3) && loaded.hasRoad(3, 1), "road BUBT - Farmgate is loaded in both directions");
+    check(loaded.hasRoad(3, 5), "road Farmgate - Gulshan is loaded");
+    check(loaded.getRoads()[1].distance == 7.25, "the distance 7.25 is loaded exactly");
+    check(loaded.addLocation("Banani") == 6, "after loading, the next new location gets ID 6");
+}
+
+void testLoadMissingFiles()
+{
+    cout << "\nLoad when the files do not exist\n";
+    Graph city;
+    vector<string> messages;
+    loadCity(city, "test_data/missing_locations.csv", "test_data/missing_roads.csv",
+             "test_data/missing_next_id.txt", messages);
+    check(city.locationCount() == 0 && city.roadCount() == 0, "the city stays empty");
+    check(messages.size() == 2, "a note for each missing CSV file (no note for next_id of an empty city)");
+    check(city.addLocation("BUBT") == 1, "a new empty city starts at ID 1");
+}
+
+void testIdsNotReusedAfterRestart()
+{
+    cout << "\nIDs are not reused after deleting and restarting\n";
+
+    // First run: add three locations, delete the one with the highest ID.
+    Graph firstRun;
+    firstRun.addLocation("BUBT");        // ID 1
+    firstRun.addLocation("Mirpur 10");   // ID 2
+    firstRun.addLocation("Farmgate");    // ID 3
+    firstRun.removeLocation(3);
+    check(saveCity(firstRun, TEST_LOCATIONS, TEST_ROADS, TEST_NEXT_ID), "the city is saved");
+
+    // Second run ("restart"): load the files into a new Graph.
+    Graph secondRun;
+    vector<string> messages;
+    loadCity(secondRun, TEST_LOCATIONS, TEST_ROADS, TEST_NEXT_ID, messages);
+    check(messages.empty(), "there are no warnings");
+    check(secondRun.locationCount() == 2, "2 locations are loaded");
+    check(secondRun.getNextId() == 4, "the saved next ID (4) is loaded");
+    check(secondRun.addLocation("Gulshan") == 4, "the new location gets ID 4, not the deleted ID 3");
+
+    // Delete every location, save, and restart again.
+    secondRun.removeLocation(1);
+    secondRun.removeLocation(2);
+    secondRun.removeLocation(4);
+    saveCity(secondRun, TEST_LOCATIONS, TEST_ROADS, TEST_NEXT_ID);
+
+    Graph thirdRun;
+    messages.clear();
+    loadCity(thirdRun, TEST_LOCATIONS, TEST_ROADS, TEST_NEXT_ID, messages);
+    check(thirdRun.locationCount() == 0, "the city is empty after deleting everything");
+    check(thirdRun.addLocation("Uttara") == 5, "even an emptied city continues with ID 5");
+}
+
+void testInvalidNextIdFile()
+{
+    cout << "\nMissing or invalid next_id.txt\n";
+    // Saved locations with IDs 1 and 5, so "highest ID + 1" is 6.
+    writeFile(TEST_LOCATIONS, "id,name\n1,BUBT\n5,Gulshan\n");
+    writeFile(TEST_ROADS, "from,to,distance\n");
+
+    // Each case: the content of next_id.txt, the expected next ID,
+    // and whether a warning is expected.
+    vector<string> contents = {"abc", "", "0", "-3", "3", "6x", "10", "6"};
+    vector<int> expectedIds = {6, 6, 6, 6, 6, 6, 10, 6};
+    vector<bool> expectWarning = {true, true, true, true, true, true, false, false};
+
+    for (size_t i = 0; i < contents.size(); i++) {
+        writeFile(TEST_NEXT_ID, contents[i] + "\n");
+        Graph city;
+        vector<string> messages;
+        loadCity(city, TEST_LOCATIONS, TEST_ROADS, TEST_NEXT_ID, messages);
+        bool ok = city.getNextId() == expectedIds[i] && (messages.size() == 1) == expectWarning[i];
+        check(ok, "next_id.txt containing \"" + contents[i] + "\" gives next ID " +
+                  to_string(expectedIds[i]));
+    }
+
+    // The file does not exist at all.
+    remove(TEST_NEXT_ID.c_str());
+    Graph city;
+    vector<string> messages;
+    loadCity(city, TEST_LOCATIONS, TEST_ROADS, TEST_NEXT_ID, messages);
+    check(city.getNextId() == 6, "a missing next_id.txt gives next ID 6 (highest ID + 1)");
+    check(messages.size() == 1, "a note explains that next_id.txt is missing");
+}
+
+void testLoadInvalidRecords()
+{
+    cout << "\nLoad files with invalid lines\n";
+    writeFile(TEST_LOCATIONS,
+              "id,name\n"
+              "1,BUBT\n"
+              "2,Mirpur 10\r\n"        // Windows line ending: accepted
+              "\n"                     // empty line: ignored
+              "abc,Farmgate\n"         // ID is not a number
+              "3\n"                    // missing name
+              "4,Uttara,extra\n"       // too many values
+              "1,Gulshan\n"            // duplicate ID
+              "5,BUBT\n"               // duplicate name
+              "0,Banani\n"             // ID not positive
+              "6, \n"                  // empty name
+              "7,Agargaon\n"
+              "8,\t\n");               // name of only a tab
+    writeFile(TEST_NEXT_ID, "8\n");
+    writeFile(TEST_ROADS,
+              "from,to,distance\n"
+              "1,2,2.5\n"
+              "2,1,9\n"                // same road again (reverse order)
+              "1,7,3.5\n"
+              "1,1,1\n"                // road to itself
+              "1,99,4\n"               // unknown location
+              "2,7,-2\n"               // negative distance
+              "2,7,abc\n"              // distance is not a number
+              "2,7,inf\n"              // not a finite number
+              "2,7\n"                  // missing distance
+              "x,7,3\n");              // ID is not a number
+
+    Graph city;
+    vector<string> messages;
+    loadCity(city, TEST_LOCATIONS, TEST_ROADS, TEST_NEXT_ID, messages);
+    check(city.locationCount() == 3, "only the 3 valid locations are loaded (1, 2, 7)");
+    check(city.hasLocation(1) && city.hasLocation(2) && city.hasLocation(7), "IDs 1, 2 and 7 exist");
+    check(city.getName(2) == "Mirpur 10", "the Windows line ending is removed from the name");
+    check(city.roadCount() == 2, "only the 2 valid roads are loaded");
+    check(city.hasRoad(1, 2) && city.hasRoad(1, 7), "roads 1 - 2 and 1 - 7 exist");
+    check(city.getRoads()[0].distance == 2.5, "the duplicate road did not replace the first one");
+    check(messages.size() == 8 + 8, "one warning for each of the 16 invalid lines");
+    check(city.getNextId() == 8, "the next ID is 8 (highest loaded ID 7 + 1, as saved)");
+}
+
+void testLoadWithoutHeader()
+{
+    cout << "\nLoad files without a header line\n";
+    writeFile(TEST_LOCATIONS, "1,BUBT\n2,Mirpur 10\n");
+    writeFile(TEST_ROADS, "1,2,2.5\n");
+    writeFile(TEST_NEXT_ID, "3\n");
+
+    Graph city;
+    vector<string> messages;
+    loadCity(city, TEST_LOCATIONS, TEST_ROADS, TEST_NEXT_ID, messages);
+    check(city.locationCount() == 2, "the first line is read as a location, not skipped");
+    check(city.roadCount() == 1, "the first line is read as a road, not skipped");
+    check(messages.empty(), "there are no warnings");
+}
+
 int main()
 {
     testLocations();
     testRoads();
+    testRenameLocation();
+    testRemoveLocation();
+    testUpdateRoad();
+    testRemoveRoad();
+    testAddLocationWithId();
+    testNextId();
+    testSaveAndLoadEmpty();
+    testSaveAndLoadCity();
+    testLoadMissingFiles();
+    testIdsNotReusedAfterRestart();
+    testInvalidNextIdFile();
+    testLoadInvalidRecords();
+    testLoadWithoutHeader();
 
     cout << "\n" << passed << " passed, " << failed << " failed\n";
 

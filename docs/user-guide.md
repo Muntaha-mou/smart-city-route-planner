@@ -24,11 +24,13 @@ cmake --build build
 ----------------- MAIN MENU ----------------------
   Locations: 4    Roads: 3
 
-  1. Add location
-  2. Show locations
-  3. Add road
-  4. Show roads
-  5. Show city network
+  Locations              Roads
+  1. Add location        5. Add road
+  2. Show locations      6. Show roads
+  3. Rename location     7. Update road distance
+  4. Delete location     8. Delete road
+
+  9. Show city network
   0. Exit
 --------------------------------------------------
 Choose an option:
@@ -36,6 +38,10 @@ Choose an option:
 
 Type the number of an option and press **Enter**. If you type something that is
 not a whole number (for example `abc` or `2x`), the program asks again.
+
+Start the program from the **project folder**, so that it finds the `data`
+folder. When it starts, it loads the saved city and shows how many locations
+and roads were loaded.
 
 ## 3. Adding and Showing Locations
 
@@ -63,7 +69,8 @@ not a whole number (for example `abc` or `2x`), the program asks again.
   already exists.
 - Numbers must be typed on their own: `12abc` or `4.5km` is not accepted, and
   the program asks again.
-- **Show roads:** prints a table of every road with its distance.
+- **Show roads:** prints a table of every road with the IDs and names of both
+  locations and the distance.
 
 ## 5. Showing the City Network
 
@@ -81,12 +88,41 @@ locations it is directly connected to, with the road distances.
 
 ## 6. Editing and Deleting
 
-*To be added in a later milestone.*
+- **Rename location (3):** choose a location ID and type the new name. The
+  same rules apply as when adding (not empty, no comma, not used by another
+  location). The location keeps its ID and its roads.
+- **Delete location (4):** choose a location ID. The program shows how many
+  roads will be deleted with it and asks `Are you sure? (y/n)`. Only `y`
+  deletes it. All roads connected to the location are deleted as well.
+- **Update road distance (7):** the program shows the roads, then asks for the
+  two location IDs of the road (in either order) and the new distance, which
+  must be greater than 0.
+- **Delete road (8):** the program shows the roads and asks for the two
+  location IDs of the road to delete. The locations themselves are kept.
+- IDs of deleted locations are never given to new locations, even after the
+  program is restarted.
 
 ## 7. Saving and Loading Data
 
-*To be added in a later milestone.* At the moment, data is lost when the
-program closes.
+- The city is stored in `data/locations.csv`, `data/roads.csv` and
+  `data/next_id.txt` (the ID for the next new location).
+- It is **loaded automatically** when the program starts and **saved
+  automatically** after every successful change; `(Saved)` is printed each time.
+- If the files do not exist yet, the program starts with an empty city.
+- If a file contains invalid lines, each one is skipped and a note such as
+  `data/locations.csv line 3: the name "BUBT" is used twice. Line skipped.` is
+  shown. The next save rewrites the files without the skipped lines.
+- If `next_id.txt` is missing or invalid, the program uses "highest location
+  ID + 1" and shows a note.
+
+To start with the illustrative sample network (10 Dhaka locations, 14 roads),
+copy the three sample files before starting the program:
+
+```powershell
+Copy-Item data\sample\* data\
+```
+
+The sample distances are illustrative values, not measured distances.
 
 ## 8. Exploring the Network (BFS and DFS)
 
@@ -105,6 +141,8 @@ program closes.
 | Problem | Solution |
 |---|---|
 | "libstdc++-6.dll was not found" | Start the program from a terminal where the MinGW `bin` folder is on the PATH |
+| The saved city is not loaded | Start the program from the project folder (the folder that contains `data`) |
+| "Warning: the data could not be saved" | Check that the `data` folder and the CSV files are not read-only or open in another program |
 | The program closes when input ends | Expected: pressing Ctrl+Z then Enter ends the input and closes the program |
 
 ---

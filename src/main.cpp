@@ -5,8 +5,11 @@
 //
 // The program shows a menu, reads the user's choice and calls one function
 // for each option. All city data is stored in a Graph object (see graph.h).
+// The data is loaded from CSV files when the program starts and saved again
+// after every change (see storage.h).
 
 #include "graph.h"
+#include "storage.h"
 
 #include <cmath>
 #include <cstdlib>
@@ -17,6 +20,11 @@
 #include <vector>
 
 using namespace std;
+
+// Where the city is saved (relative to the folder the program is started in).
+const string LOCATIONS_FILE = "data/locations.csv";
+const string ROADS_FILE = "data/roads.csv";
+const string NEXT_ID_FILE = "data/next_id.txt";
 
 // ===== Reading input =====
 
@@ -66,24 +74,57 @@ double readDouble(const string& prompt)
     }
 }
 
-// ===== Menu options =====
+// Asks a yes/no question. Returns true only for "y" or "Y".
+bool readYes(const string& prompt)
+{
+    string answer = readLine(prompt);
+    return answer == "y" || answer == "Y";
+}
+
+// Checks a location name typed by the user and prints the problem, if any.
+// `ownId` is the location being renamed (0 when adding a new location),
+// so that a location may keep its own name.
+bool isValidName(const Graph& city, const string& name, int ownId)
+{
+    // A name made only of spaces or tabs counts as empty.
+    if (name.find_first_not_of(" \t") == string::npos) {
+        cout << "  Error: the name cannot be empty.\n";
+        return false;
+    }
+    if (name.find(',') != string::npos) {
+        cout << "  Error: the name cannot contain a comma.\n";
+        return false;
+    }
+    if (city.nameExists(name) && city.getName(ownId) != name) {
+        cout << "  Error: a location named \"" << name << "\" already exists.\n";
+        return false;
+    }
+    return true;
+}
+
+// Saves the city after a change and reports a problem if saving failed.
+void saveChanges(const Graph& city)
+{
+    if (saveCity(city, LOCATIONS_FILE, ROADS_FILE, NEXT_ID_FILE)) {
+        cout << "  (Saved)\n";
+    } else {
+        cout << "  Warning: the data could not be saved to the data folder.\n";
+    }
+}
+
+// ===== Locations =====
 
 // Option 1: add a new location.
 void addLocation(Graph& city)
 {
     string name = readLine("Location name: ");
-
-    // A name made only of spaces counts as empty.
-    if (name.find_first_not_of(' ') == string::npos) {
-        cout << "  Error: the name cannot be empty.\n";
-    } else if (name.find(',') != string::npos) {
-        cout << "  Error: the name cannot contain a comma.\n";
-    } else if (city.nameExists(name)) {
-        cout << "  Error: a location named \"" << name << "\" already exists.\n";
-    } else {
-        int id = city.addLocation(name);
-        cout << "  Location \"" << name << "\" added with ID " << id << ".\n";
+    if (!isValidName(city, name, 0)) {
+        return;
     }
+
+    int id = city.addLocation(name);
+    cout << "  Location \"" << name << "\" added with ID " << id << ".\n";
+    saveChanges(city);
 }
 
 // Option 2: show all locations in a table.
@@ -102,7 +143,66 @@ void showLocations(const Graph& city)
     }
 }
 
-// Option 3: add a new road between two locations.
+// Option 3: change the name of a location.
+void renameLocation(Graph& city)
+{
+    if (city.locationCount() == 0) {
+        cout << "  No locations yet.\n";
+        return;
+    }
+
+    showLocations(city);
+    cout << "\n";
+    int id = readInt("ID of the location to rename: ");
+    if (!city.hasLocation(id)) {
+        cout << "  Error: location " << id << " does not exist.\n";
+        return;
+    }
+
+    string oldName = city.getName(id);
+    string newName = readLine("New name: ");
+    if (!isValidName(city, newName, id)) {
+        return;
+    }
+
+    city.renameLocation(id, newName);
+    cout << "  Location " << id << " renamed from \"" << oldName << "\" to \""
+         << newName << "\".\n";
+    saveChanges(city);
+}
+
+// Option 4: delete a location and all of its roads.
+void deleteLocation(Graph& city)
+{
+    if (city.locationCount() == 0) {
+        cout << "  No locations yet.\n";
+        return;
+    }
+
+    showLocations(city);
+    cout << "\n";
+    int id = readInt("ID of the location to delete: ");
+    if (!city.hasLocation(id)) {
+        cout << "  Error: location " << id << " does not exist.\n";
+        return;
+    }
+
+    string name = city.getName(id);
+    size_t roads = city.getNeighbors(id).size();
+    cout << "  \"" << name << "\" and its " << roads << " road(s) will be deleted.\n";
+    if (!readYes("Are you sure? (y/n): ")) {
+        cout << "  Nothing was deleted.\n";
+        return;
+    }
+
+    city.removeLocation(id);
+    cout << "  Location \"" << name << "\" and its " << roads << " road(s) were deleted.\n";
+    saveChanges(city);
+}
+
+// ===== Roads =====
+
+// Option 5: add a new road between two locations.
 void addRoad(Graph& city)
 {
     if (city.locationCount() < 2) {
@@ -131,10 +231,11 @@ void addRoad(Graph& city)
         city.addRoad(from, to, distance);
         cout << "  Road added: " << city.getName(from) << " <-> " << city.getName(to)
              << " (" << distance << " km)\n";
+        saveChanges(city);
     }
 }
 
-// Option 4: show all roads in a table.
+// Option 6: show all roads in a table.
 void showRoads(const Graph& city)
 {
     vector<Road> roads = city.getRoads();
@@ -143,15 +244,82 @@ void showRoads(const Graph& city)
         return;
     }
 
-    cout << "\n  " << left << setw(25) << "From" << setw(25) << "To" << "Distance (km)\n";
-    cout << "  " << string(63, '-') << "\n";
+    cout << "\n  " << left << setw(6) << "From" << setw(22) << "Name"
+         << setw(6) << "To" << setw(22) << "Name" << "Distance (km)\n";
+    cout << "  " << string(69, '-') << "\n";
     for (const Road& road : roads) {
-        cout << "  " << left << setw(25) << city.getName(road.from)
-             << setw(25) << city.getName(road.to) << road.distance << "\n";
+        cout << "  " << left << setw(6) << road.from << setw(22) << city.getName(road.from)
+             << setw(6) << road.to << setw(22) << city.getName(road.to)
+             << road.distance << "\n";
     }
 }
 
-// Option 5: show the network as an adjacency list
+// Asks for the two location IDs of an existing road.
+// Returns false (after printing the problem) if there is no such road.
+bool readExistingRoad(const Graph& city, int& from, int& to)
+{
+    from = readInt("From location ID: ");
+    to = readInt("To location ID: ");
+    if (!city.hasRoad(from, to)) {
+        cout << "  Error: there is no road between location " << from
+             << " and location " << to << ".\n";
+        return false;
+    }
+    return true;
+}
+
+// Option 7: change the distance of a road.
+void updateRoad(Graph& city)
+{
+    if (city.roadCount() == 0) {
+        cout << "  No roads yet.\n";
+        return;
+    }
+
+    showRoads(city);
+    cout << "\n";
+    int from;
+    int to;
+    if (!readExistingRoad(city, from, to)) {
+        return;
+    }
+
+    double distance = readDouble("New distance in km: ");
+    if (distance <= 0) {
+        cout << "  Error: the distance must be greater than 0.\n";
+        return;
+    }
+
+    city.updateRoad(from, to, distance);
+    cout << "  Road " << city.getName(from) << " <-> " << city.getName(to)
+         << " now has a distance of " << distance << " km.\n";
+    saveChanges(city);
+}
+
+// Option 8: delete a road.
+void deleteRoad(Graph& city)
+{
+    if (city.roadCount() == 0) {
+        cout << "  No roads yet.\n";
+        return;
+    }
+
+    showRoads(city);
+    cout << "\n";
+    int from;
+    int to;
+    if (!readExistingRoad(city, from, to)) {
+        return;
+    }
+
+    city.removeRoad(from, to);
+    cout << "  Road " << city.getName(from) << " <-> " << city.getName(to) << " deleted.\n";
+    saveChanges(city);
+}
+
+// ===== City network =====
+
+// Option 9: show the network as an adjacency list
 // (every location followed by the locations it is connected to).
 void showNetwork(const Graph& city)
 {
@@ -177,6 +345,22 @@ void showNetwork(const Graph& city)
 
 // ===== Main program =====
 
+void showMenu(const Graph& city)
+{
+    cout << "\n----------------- MAIN MENU ----------------------\n";
+    cout << "  Locations: " << city.locationCount()
+         << "    Roads: " << city.roadCount() << "\n\n";
+    cout << "  Locations              Roads\n";
+    cout << "  1. Add location        5. Add road\n";
+    cout << "  2. Show locations      6. Show roads\n";
+    cout << "  3. Rename location     7. Update road distance\n";
+    cout << "  4. Delete location     8. Delete road\n";
+    cout << "\n";
+    cout << "  9. Show city network\n";
+    cout << "  0. Exit\n";
+    cout << "--------------------------------------------------\n";
+}
+
 int main()
 {
     Graph city;
@@ -189,18 +373,17 @@ int main()
     cout << "    Team Quad Core - CSE 232 Algorithms Project\n";
     cout << "==================================================\n";
 
-    while (true) {
-        cout << "\n----------------- MAIN MENU ----------------------\n";
-        cout << "  Locations: " << city.locationCount()
-             << "    Roads: " << city.roadCount() << "\n\n";
-        cout << "  1. Add location\n";
-        cout << "  2. Show locations\n";
-        cout << "  3. Add road\n";
-        cout << "  4. Show roads\n";
-        cout << "  5. Show city network\n";
-        cout << "  0. Exit\n";
-        cout << "--------------------------------------------------\n";
+    // Load the saved city and show any problems found in the files.
+    vector<string> messages;
+    loadCity(city, LOCATIONS_FILE, ROADS_FILE, NEXT_ID_FILE, messages);
+    for (const string& message : messages) {
+        cout << "  Note: " << message << "\n";
+    }
+    cout << "  Loaded " << city.locationCount() << " location(s) and "
+         << city.roadCount() << " road(s).\n";
 
+    while (true) {
+        showMenu(city);
         int choice = readInt("Choose an option: ");
         cout << "\n";
 
@@ -209,10 +392,18 @@ int main()
         } else if (choice == 2) {
             showLocations(city);
         } else if (choice == 3) {
-            addRoad(city);
+            renameLocation(city);
         } else if (choice == 4) {
-            showRoads(city);
+            deleteLocation(city);
         } else if (choice == 5) {
+            addRoad(city);
+        } else if (choice == 6) {
+            showRoads(city);
+        } else if (choice == 7) {
+            updateRoad(city);
+        } else if (choice == 8) {
+            deleteRoad(city);
+        } else if (choice == 9) {
             showNetwork(city);
         } else if (choice == 0) {
             cout << "Goodbye!\n";

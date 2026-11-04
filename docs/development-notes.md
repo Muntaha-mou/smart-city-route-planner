@@ -58,12 +58,14 @@ so run them from a terminal where the MinGW `bin` folder is on the PATH.
 |---|---|---|
 | `include/graph.h` | `Edge` and `Road` structs, `Graph` class declaration | No |
 | `src/graph.cpp` | The code of the `Graph` functions | No |
+| `include/storage.h`, `src/storage.cpp` | `saveCity()` and `loadCity()`: CSV files | No (returns messages instead) |
 | `src/main.cpp` | Input functions, one function per menu option, `main()` | Yes |
-| `tests/tests.cpp` | Automatic checks for `Graph` | Prints PASS/FAIL |
+| `tests/tests.cpp` | Automatic checks for `Graph` and for saving/loading | Prints PASS/FAIL |
 
-**Main rule:** `graph.cpp` (and later the algorithm code) never prints and never
-reads the keyboard. It only stores data and returns answers. `main.cpp` talks
-to the user. This lets a future Qt GUI reuse the graph code unchanged.
+**Main rule:** `graph.cpp`, `storage.cpp` (and later the algorithm code) never
+print and never read the keyboard. They only store data and return answers.
+`main.cpp` talks to the user. This lets a future Qt GUI reuse this code
+unchanged.
 
 ### Data structures (in `graph.h`)
 
@@ -100,8 +102,22 @@ class Graph {
 | `getNeighbors(id)` | The list of roads starting at this location. |
 | `getRoads()` | Every road once: each road is stored twice, so only the copy where `from < to` is kept. |
 | `roadCount()` | Number of roads. |
+| `addLocationWithId(id, name)` | Used only when loading: adds a location with its **saved** ID, so roads still point to the right locations. Moves `nextId` past the highest ID. |
+| `getNextId()`, `setNextId(id)` | Read the next ID (for saving) and restore it (when loading). `setNextId` can only **raise** the value, so an ID is never reused. |
+| `renameLocation(id, newName)` | Changes the name. Refused if the location is missing, the name is empty, or another location already has it. |
+| `removeLocation(id)` | Each road is stored in two lists, so it first removes this location from every **neighbour's** list, then erases the location and its own list. |
+| `updateRoad(from, to, distance)` | Changes the distance in **both** copies of the road. Refused if the road does not exist or the distance is not positive. |
+| `removeRoad(from, to)` | Removes **both** copies of the road. The locations are kept. |
 
 Functions marked `const` only *read* the graph; they never change it.
+
+### Saving and loading (in `storage.cpp`)
+
+| Function | What it does |
+|---|---|
+| `saveCity(city, locationsFile, roadsFile, nextIdFile)` | Creates the `data` folder if needed, then writes a header line and one line per location (`id,name`) and per road (`from,to,distance`), and the next location ID into `next_id.txt`. Returns `false` if a file cannot be written. |
+| `loadCity(city, locationsFile, roadsFile, nextIdFile, messages)` | Loads locations **first** (roads refer to their IDs), then roads, then the next ID. Each line is split at commas and checked; a bad line is skipped and a message with its line number is added to `messages`. A missing file just leaves the city empty. The saved next ID is used only if it is larger than "highest ID + 1"; otherwise a note is added. |
+| `splitByComma`, `textToInt`, `textToDouble` | Small helpers used only inside `storage.cpp`. |
 
 ### Menu program (in `main.cpp`)
 
@@ -115,7 +131,11 @@ Functions marked `const` only *read* the graph; they never change it.
 | `addRoad(city)` | Shows the locations, asks for two IDs and a distance, checks each rule with a clear message, then adds the road. |
 | `showRoads(city)` | Prints a table: from, to, distance. |
 | `showNetwork(city)` | Prints the adjacency list: each location, then the locations it connects to. |
-| `main()` | Creates the `Graph`, shows the menu in a loop, and calls the function for the chosen option until the user chooses 0. |
+| `renameLocation(city)`, `deleteLocation(city)` | Ask for a location ID (and a new name, or a y/n confirmation), check it, then call the `Graph` function. |
+| `updateRoad(city)`, `deleteRoad(city)` | Show the roads, ask for the road's two location IDs (`readExistingRoad`), then call the `Graph` function. |
+| `isValidName(city, name, ownId)` | The name rules shared by add and rename (not empty, no comma, not used by another location). |
+| `saveChanges(city)` | Called after every successful change; saves the city and prints `(Saved)` or a warning. |
+| `main()` | Creates the `Graph`, loads the saved city (showing any notes), shows the menu in a loop, and calls the function for the chosen option until the user chooses 0. |
 
 The menu functions check the user's input and explain any problem; `Graph`
 also refuses invalid data as a safety net.
@@ -123,8 +143,12 @@ also refuses invalid data as a safety net.
 ### Tests (in `tests/tests.cpp`)
 
 `check(condition, description)` prints **PASS** if the condition is true and
-**FAIL** if not. `testLocations()` and `testRoads()` call `check()` many times.
-`main()` returns 1 if anything failed, so `ctest` reports the failure.
+**FAIL** if not. Each `test...()` function calls `check()` many times: adding,
+renaming and deleting locations; adding, updating and deleting roads; and
+saving and loading (empty city, full city with ID gaps, missing files, and a
+file with 16 invalid lines, files without a header, an impossible save folder, and ID persistence after deleting and restarting). The save/load tests write temporary files into a
+`test_data` folder. `main()` returns 1 if anything failed, so `ctest` reports
+the failure.
 
 ## 4. Git Workflow
 
@@ -151,15 +175,21 @@ also refuses invalid data as a safety net.
 | 2026-11-04 | Algorithms in scope: BFS, DFS, Dijkstra, Kruskal | Core graph algorithms of the course; Kruskal handles disconnected networks naturally |
 | 2026-11-04 | Excluded for now: budget planning, Floyd–Warshall, Prim, Merge Sort, transport modes, fares | Keep the first version small; may return if the official proposal requires them |
 | 2026-11-04 | No static linking | Keep CMake simple; run from a terminal with MinGW on the PATH |
+| 2026-11-04 | CSV code in its own file (`storage.cpp`), not in `Graph` or the menu | `Graph` stays free of input/output; file handling can be explained and tested separately |
+| 2026-11-04 | Save automatically after every successful change | No "save" option to forget; data survives if the window is closed |
+| 2026-11-04 | Location IDs are saved and kept when loading (`addLocationWithId`) | Roads in `roads.csv` refer to location IDs |
+| 2026-11-04 | The next location ID is saved in `data/next_id.txt` | IDs of deleted locations are never reused, even after a restart; a missing or invalid file falls back safely to "highest ID + 1" |
+| 2026-11-04 | Invalid CSV lines are skipped with a message, not fatal | One bad line should not lose the rest of the city |
+| 2026-11-04 | Working files `data/locations.csv` and `data/roads.csv` are not in Git; sample files are in `data/sample/` | Test changes do not end up in commits; everyone can start from the same sample |
+| 2026-11-04 | Deleting a location asks for confirmation (y/n) | It also deletes all its roads |
 
 ## 6. Milestones
 
 | Milestone | Content | Status |
 |---|---|---|
 | M1 | Project foundation (CMake, Qt prototype) | Done (`78f875e`) |
-| S1 | Add/show locations and roads, city network display, plain console menu, tests | Done |
-| — | Edit and delete locations and roads | Planned |
-| S2 | Save and load CSV files, sample data | Planned |
+| S1 | Add/show locations and roads, city network display, plain console menu, tests | Done (`6f76f77`) |
+| S2 | Rename/delete locations, update/delete roads, CSV save/load, sample data | In review |
 | S3 | BFS and DFS | Planned |
 | S4 | Dijkstra's shortest route | Planned |
 | S5 | Kruskal's minimum spanning tree | Planned |

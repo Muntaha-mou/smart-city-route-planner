@@ -10,12 +10,19 @@
 
 #include <cmath>
 
+// True if the name is empty or contains only spaces/tabs.
+// (Only used in this file.)
+static bool isBlankName(const std::string& name)
+{
+    return name.find_first_not_of(" \t") == std::string::npos;
+}
+
 // ===== Locations =====
 
 // Time: O(V) because nameExists() checks every name.
 int Graph::addLocation(const std::string& name)
 {
-    if (name.empty() || nameExists(name)) {
+    if (isBlankName(name) || nameExists(name)) {
         return -1;
     }
 
@@ -25,6 +32,59 @@ int Graph::addLocation(const std::string& name)
     names[id] = name;
     adjacency[id] = std::vector<Edge>();   // a new location has no roads yet
     return id;
+}
+
+// Time: O(V) because nameExists() checks every name.
+bool Graph::addLocationWithId(int id, const std::string& name)
+{
+    if (id <= 0 || hasLocation(id) || isBlankName(name) || nameExists(name)) {
+        return false;
+    }
+
+    names[id] = name;
+    adjacency[id] = std::vector<Edge>();
+
+    // Make sure a location added later gets a new, unused ID.
+    if (id >= nextId) {
+        nextId = id + 1;
+    }
+    return true;
+}
+
+// Time: O(V) because nameExists() checks every name.
+bool Graph::renameLocation(int id, const std::string& newName)
+{
+    if (!hasLocation(id) || isBlankName(newName)) {
+        return false;
+    }
+    // The name may not belong to a DIFFERENT location.
+    // (Keeping the same name for the same location is allowed.)
+    if (nameExists(newName) && names[id] != newName) {
+        return false;
+    }
+
+    names[id] = newName;
+    return true;
+}
+
+// Time: O(deg x deg') - for each road of this location, the neighbour's
+// road list is searched to remove the road from the other side too.
+bool Graph::removeLocation(int id)
+{
+    if (!hasLocation(id)) {
+        return false;
+    }
+
+    // Every road is stored in two lists. The copy in THIS location's list
+    // disappears when the list is erased below, but the copy in each
+    // neighbour's list must be removed one by one.
+    for (const Edge& edge : adjacency[id]) {
+        removeEdge(edge.to, id);
+    }
+
+    adjacency.erase(id);
+    names.erase(id);
+    return true;
 }
 
 bool Graph::hasLocation(int id) const
@@ -65,6 +125,19 @@ int Graph::locationCount() const
     return static_cast<int>(names.size());
 }
 
+int Graph::getNextId() const
+{
+    return nextId;
+}
+
+void Graph::setNextId(int id)
+{
+    // Only move forward: going back could give a new location an old ID.
+    if (id > nextId) {
+        nextId = id;
+    }
+}
+
 // ===== Roads =====
 
 // Time: O(log V + deg) - the duplicate check scans one adjacency list.
@@ -87,6 +160,55 @@ bool Graph::addRoad(int from, int to, double distance)
     adjacency[from].push_back({to, distance});
     adjacency[to].push_back({from, distance});
     return true;
+}
+
+// Time: O(log V + deg)
+bool Graph::updateRoad(int from, int to, double distance)
+{
+    if (!hasRoad(from, to)) {
+        return false;
+    }
+    if (!std::isfinite(distance) || distance <= 0) {
+        return false;
+    }
+
+    // Change the distance in both copies of the road.
+    // `Edge& edge` is a reference, so changing it changes the stored edge.
+    for (Edge& edge : adjacency[from]) {
+        if (edge.to == to) {
+            edge.distance = distance;
+        }
+    }
+    for (Edge& edge : adjacency[to]) {
+        if (edge.to == from) {
+            edge.distance = distance;
+        }
+    }
+    return true;
+}
+
+// Time: O(log V + deg)
+bool Graph::removeRoad(int from, int to)
+{
+    if (!hasRoad(from, to)) {
+        return false;
+    }
+
+    // Remove both copies of the road.
+    removeEdge(from, to);
+    removeEdge(to, from);
+    return true;
+}
+
+void Graph::removeEdge(int from, int to)
+{
+    std::vector<Edge>& edges = adjacency[from];
+    for (size_t i = 0; i < edges.size(); i++) {
+        if (edges[i].to == to) {
+            edges.erase(edges.begin() + i);
+            return;   // there is at most one road between two locations
+        }
+    }
 }
 
 // Time: O(log V + deg)

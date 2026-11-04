@@ -7,8 +7,8 @@ shortest routes and plan a minimum road network.
 **Team:** Quad Core
 **Course:** CSE 232 — Algorithms project
 
-> **Status:** Milestone S1 — add and show locations and roads, show the city
-> network. Data is not saved yet.
+> **Status:** Milestone S2 — locations and roads can be added, shown, updated
+> and deleted, and the city is saved to CSV files.
 
 ## Features
 
@@ -17,8 +17,9 @@ shortest routes and plan a minimum road network.
 | Add and show locations | Done (S1) |
 | Add and show roads | Done (S1) |
 | Show the city network (adjacency list) | Done (S1) |
-| Edit and delete locations and roads | Planned |
-| Save and load data (CSV files) | Planned |
+| Rename and delete locations (deleting also removes their roads) | Done (S2) |
+| Update road distances and delete roads | Done (S2) |
+| Save and load data (CSV files) | Done (S2) |
 | Explore the network with BFS and DFS | Planned |
 | Shortest route with Dijkstra's algorithm | Planned |
 | Minimum spanning tree with Kruskal's algorithm | Planned |
@@ -28,15 +29,50 @@ shortest routes and plan a minimum road network.
 ```
 CMakeLists.txt      Build instructions for CMake
 include/graph.h     Edge and Road structs, Graph class (declarations)
+include/storage.h   Saving and loading the city (declarations)
 src/graph.cpp       Graph functions (the city data)
+src/storage.cpp     CSV save and load
 src/main.cpp        Menu program: input, output and menu options
-tests/tests.cpp     Automatic checks for the Graph class
+tests/tests.cpp     Automatic checks for the Graph and for saving/loading
+data/sample/        Illustrative sample data (10 Dhaka locations, 14 roads)
 docs/               Project documentation
 future-gui/         Qt 6 GUI prototype (not built; kept for a later version)
 ```
 
-`graph.cpp` never prints or reads the keyboard; only `main.cpp` does. This keeps
-the graph code reusable for a future Qt GUI.
+`graph.cpp` and `storage.cpp` never print or read the keyboard; only `main.cpp`
+does. This keeps the graph code reusable for a future Qt GUI.
+
+## Data Files
+
+The program loads the city from three files when it starts and saves them
+again after every change:
+
+| File | Format | Example line |
+|---|---|---|
+| `data/locations.csv` | `id,name` | `1,BUBT` |
+| `data/roads.csv` | `from,to,distance` | `1,2,2.5` |
+| `data/next_id.txt` | one number: the ID for the next new location | `11` |
+
+- `next_id.txt` makes sure the ID of a deleted location is never given to a new
+  location, even after a restart. If it is missing or invalid, the program uses
+  "highest location ID + 1" and shows a note.
+
+- If the files do not exist, the program starts with an empty city.
+- Invalid lines (wrong number of values, non-numeric IDs, duplicate IDs or
+  names, unknown locations, non-positive distances, duplicate roads) are
+  skipped, and a note with the line number is shown at start-up.
+- The paths are relative to the folder the program is started in, so start it
+  from the project folder.
+- These working files are not stored in Git (see `.gitignore`).
+
+**Sample data:** to start with the sample network, copy the three sample files
+into the `data` folder before starting the program:
+
+```powershell
+Copy-Item data\sample\* data\
+```
+
+The sample distances are **illustrative values**, not measured distances.
 
 ## Requirements (Windows 10/11)
 
@@ -55,7 +91,7 @@ $env:PATH = "S:\Qt\Tools\mingw1510_64\bin;S:\Qt\Tools\CMake_64\bin;S:\Qt\Tools\N
 cmake -S . -B build -G Ninja                 # configure (once)
 cmake --build build                          # build
 ctest --test-dir build --output-on-failure   # run the tests
-.\build\SmartCityPlanner.exe                 # start the program
+.\build\SmartCityPlanner.exe                 # start the program (from the project folder)
 ```
 
 The program needs the MinGW runtime DLLs, so start it from a terminal where the
