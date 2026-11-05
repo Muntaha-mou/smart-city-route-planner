@@ -6,14 +6,18 @@
 // The program shows a menu, reads the user's choice and calls one function
 // for each option. All city data is stored in a Graph object (see graph.h).
 // The data is loaded from CSV files when the program starts and saved again
-// after every change (see storage.h).
+// after every change (see storage.h). Colours, borders and other screen
+// helpers come from ui.h.
 
 #include "algorithms.h"
 #include "graph.h"
 #include "storage.h"
+#include "ui.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <filesystem>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -22,32 +26,61 @@
 
 using namespace std;
 
-// Where the city is saved (relative to the folder the program is started in).
-const string LOCATIONS_FILE = "data/locations.csv";
-const string ROADS_FILE = "data/roads.csv";
-const string NEXT_ID_FILE = "data/next_id.txt";
+// Where the city is saved. main() chooses the folder (see chooseDataFolder).
+string dataFolder = "data";
+string locationsFile = "data/locations.csv";
+string roadsFile = "data/roads.csv";
+string nextIdFile = "data/next_id.txt";
+
+// ===== Small display helpers =====
+
+// "[3]" for location 3.
+string idText(int id)
+{
+    return "[" + to_string(id) + "]";
+}
+
+// "BUBT [1]"
+string nameWithId(const Graph& city, int id)
+{
+    return city.getName(id) + " " + idText(id);
+}
+
+// The symbol for a two-way road.
+string twoWay()
+{
+    return colorsOn() ? "↔" : "<->";
+}
+
+// One table cell: the text fitted to `width` characters, in a colour.
+string cell(const string& text, int width, Color color)
+{
+    return paint(fitText(text, width), color);
+}
 
 // ===== Reading input =====
 
 // Shows a prompt and reads one whole line typed by the user.
-string readLine(const string& prompt)
+string readLine(const string& question)
 {
-    cout << prompt;
+    cout << promptText(question);
     string line;
     if (!getline(cin, line)) {
         // The input has ended (for example Ctrl+Z on Windows).
-        cout << "\nInput ended. Goodbye!\n";
+        endInput();
+        cout << "\n\n  Input ended. Goodbye!\n";
         exit(0);
     }
+    endInput();
     return line;
 }
 
 // Reads a whole number. Keeps asking until the input is valid.
 // "12" is accepted; "12abc", "1 2" and "abc" are rejected.
-int readInt(const string& prompt)
+int readInt(const string& question)
 {
     while (true) {
-        string line = readLine(prompt);
+        string line = readLine(question);
         stringstream input(line);
         int number;
         char extra;
@@ -55,15 +88,15 @@ int readInt(const string& prompt)
         if (input >> number && !(input >> extra)) {
             return number;
         }
-        cout << "  Invalid input. Please enter a whole number.\n";
+        printError("Invalid input. Please enter a whole number.");
     }
 }
 
 // Reads a decimal number such as 4.5. Keeps asking until the input is valid.
-double readDouble(const string& prompt)
+double readDouble(const string& question)
 {
     while (true) {
-        string line = readLine(prompt);
+        string line = readLine(question);
         stringstream input(line);
         double number;
         char extra;
@@ -71,14 +104,14 @@ double readDouble(const string& prompt)
         if (input >> number && !(input >> extra) && isfinite(number)) {
             return number;
         }
-        cout << "  Invalid input. Please enter a number, for example 4.5\n";
+        printError("Invalid input. Please enter a number, for example 4.5");
     }
 }
 
 // Asks a yes/no question. Returns true only for "y" or "Y".
-bool readYes(const string& prompt)
+bool readYes(const string& question)
 {
-    string answer = readLine(prompt);
+    string answer = readLine(question);
     return answer == "y" || answer == "Y";
 }
 
@@ -89,30 +122,69 @@ bool readYes(const string& prompt)
 bool isValidName(const Graph& city, const string& name, int ownId)
 {
     if (name.empty()) {
-        cout << "  Error: the name cannot be empty.\n";
+        printError("The name cannot be empty.");
         return false;
     }
     if (name.find(',') != string::npos) {
-        cout << "  Error: the name cannot contain a comma.\n";
+        printError("The name cannot contain a comma.");
         return false;
     }
     // Names are compared ignoring upper/lower case: "bubt" is the same as "BUBT".
     int owner = city.findLocationId(name);
     if (owner != -1 && owner != ownId) {
-        cout << "  Error: a location named \"" << city.getName(owner) << "\" already exists.\n";
+        printError("A location named \"" + city.getName(owner) + "\" already exists.");
         return false;
     }
     return true;
 }
 
+// The message shown when a distance is not allowed.
+void printDistanceError()
+{
+    printError("The distance must be greater than 0 and at most " +
+               formatNumber(MAX_ROAD_DISTANCE) + " km.");
+}
+
 // Saves the city after a change and reports a problem if saving failed.
 void saveChanges(const Graph& city)
 {
-    if (saveCity(city, LOCATIONS_FILE, ROADS_FILE, NEXT_ID_FILE)) {
-        cout << "  (Saved)\n";
+    if (saveCity(city, locationsFile, roadsFile, nextIdFile)) {
+        printHint("Saved automatically to the data folder.");
     } else {
-        cout << "  Warning: the data could not be saved to the data folder.\n";
+        printWarning("The data could not be saved to the data folder.");
     }
+}
+
+// ===== Tables =====
+
+// The table of all locations (used by several screens).
+void printLocationsTable(const Graph& city)
+{
+    const vector<int> widths = {8, 36, 8};
+    printTableRow({"ID", "Location", "Roads"}, widths, Color::Cyan);
+    printLine();
+    for (int id : city.getLocationIds()) {
+        cout << "  " << cell(idText(id), widths[0], Color::Blue)
+             << cell(city.getName(id), widths[1], Color::Normal)
+             << cell(to_string(city.getNeighbors(id).size()), widths[2], Color::Purple) << "\n";
+    }
+    printLine();
+}
+
+// The table of all roads (used by several screens).
+void printRoadsTable(const Graph& city)
+{
+    const vector<int> widths = {6, 22, 6, 22, 14};
+    printTableRow({"From", "Location", "To", "Location", "Distance"}, widths, Color::Cyan);
+    printLine();
+    for (const Road& road : city.getRoads()) {
+        cout << "  " << cell(idText(road.from), widths[0], Color::Blue)
+             << cell(city.getName(road.from), widths[1], Color::Normal)
+             << cell(idText(road.to), widths[2], Color::Blue)
+             << cell(city.getName(road.to), widths[3], Color::Normal)
+             << cell(formatNumber(road.distance) + " km", widths[4], Color::Purple) << "\n";
+    }
+    printLine();
 }
 
 // ===== Locations =====
@@ -120,45 +192,48 @@ void saveChanges(const Graph& city)
 // Option 1: add a new location.
 void addLocation(Graph& city)
 {
+    printScreenHeader("LOCATIONS", "Add Location");
+    printHint("Spaces at the start and end are removed. Upper/lower case is ignored");
+    printHint("when checking for duplicates. A name cannot contain a comma.");
+    printBlankLine();
+
     string name = trimName(readLine("Location name: "));   // remove spaces at both ends
     if (!isValidName(city, name, 0)) {
         return;
     }
 
     int id = city.addLocation(name);
-    cout << "  Location \"" << name << "\" added with ID " << id << ".\n";
+    printBlankLine();
+    printSuccess("Location \"" + name + "\" added with ID " + to_string(id) + ".");
     saveChanges(city);
 }
 
 // Option 2: show all locations in a table.
 void showLocations(const Graph& city)
 {
+    printScreenHeader("LOCATIONS", "Show Locations");
     if (city.locationCount() == 0) {
-        cout << "  No locations yet.\n";
+        printWarning("No locations yet. Choose option 1 to add one.");
         return;
     }
-
-    cout << "\n  " << left << setw(6) << "ID" << setw(25) << "Name" << "Roads\n";
-    cout << "  " << string(36, '-') << "\n";
-    for (int id : city.getLocationIds()) {
-        cout << "  " << left << setw(6) << id << setw(25) << city.getName(id)
-             << city.getNeighbors(id).size() << "\n";
-    }
+    printLocationsTable(city);
+    printHint(to_string(city.locationCount()) + " location(s) in the city.");
 }
 
 // Option 3: change the name of a location.
 void renameLocation(Graph& city)
 {
+    printScreenHeader("LOCATIONS", "Rename Location");
     if (city.locationCount() == 0) {
-        cout << "  No locations yet.\n";
+        printWarning("No locations yet.");
         return;
     }
 
-    showLocations(city);
-    cout << "\n";
+    printLocationsTable(city);
+    printBlankLine();
     int id = readInt("ID of the location to rename: ");
     if (!city.hasLocation(id)) {
-        cout << "  Error: location " << id << " does not exist.\n";
+        printError("Location " + to_string(id) + " does not exist.");
         return;
     }
 
@@ -169,37 +244,44 @@ void renameLocation(Graph& city)
     }
 
     city.renameLocation(id, newName);
-    cout << "  Location " << id << " renamed from \"" << oldName << "\" to \""
-         << newName << "\".\n";
+    printBlankLine();
+    printSuccess("Location " + to_string(id) + " renamed from \"" + oldName + "\" to \"" +
+                 newName + "\".");
     saveChanges(city);
 }
 
 // Option 4: delete a location and all of its roads.
 void deleteLocation(Graph& city)
 {
+    printScreenHeader("LOCATIONS", "Delete Location");
     if (city.locationCount() == 0) {
-        cout << "  No locations yet.\n";
+        printWarning("No locations yet.");
         return;
     }
 
-    showLocations(city);
-    cout << "\n";
+    printLocationsTable(city);
+    printBlankLine();
     int id = readInt("ID of the location to delete: ");
     if (!city.hasLocation(id)) {
-        cout << "  Error: location " << id << " does not exist.\n";
+        printError("Location " + to_string(id) + " does not exist.");
         return;
     }
 
     string name = city.getName(id);
     size_t roads = city.getNeighbors(id).size();
-    cout << "  \"" << name << "\" and its " << roads << " road(s) will be deleted.\n";
+    printBlankLine();
+    cout << "  " << paint("[DELETE]", Color::Error) << " "
+         << paint("\"" + name + "\" and its " + to_string(roads) + " road(s) will be deleted.",
+                  Color::Error)
+         << "\n";
     if (!readYes("Are you sure? (y/n): ")) {
-        cout << "  Nothing was deleted.\n";
+        printInfo("Nothing was deleted.");
         return;
     }
 
     city.removeLocation(id);
-    cout << "  Location \"" << name << "\" and its " << roads << " road(s) were deleted.\n";
+    printSuccess("Location \"" + name + "\" and its " + to_string(roads) +
+                 " road(s) were deleted.");
     saveChanges(city);
 }
 
@@ -208,33 +290,36 @@ void deleteLocation(Graph& city)
 // Option 5: add a new road between two locations.
 void addRoad(Graph& city)
 {
+    printScreenHeader("ROADS", "Add Road");
     if (city.locationCount() < 2) {
-        cout << "  Error: add at least two locations first.\n";
+        printError("Add at least two locations first.");
         return;
     }
 
-    showLocations(city);
-    cout << "\n";
+    printLocationsTable(city);
+    printHint("Roads are two-way. Distance: greater than 0 and at most " +
+              formatNumber(MAX_ROAD_DISTANCE) + " km.");
+    printBlankLine();
     int from = readInt("From location ID: ");
     int to = readInt("To location ID: ");
     double distance = readDouble("Distance in km: ");
+    printBlankLine();
 
     // Check each rule and tell the user what is wrong.
     if (!city.hasLocation(from)) {
-        cout << "  Error: location " << from << " does not exist.\n";
+        printError("Location " + to_string(from) + " does not exist.");
     } else if (!city.hasLocation(to)) {
-        cout << "  Error: location " << to << " does not exist.\n";
+        printError("Location " + to_string(to) + " does not exist.");
     } else if (from == to) {
-        cout << "  Error: a road must connect two different locations.\n";
+        printError("A road must connect two different locations.");
     } else if (!isValidDistance(distance)) {
-        cout << "  Error: the distance must be greater than 0 and at most "
-             << MAX_ROAD_DISTANCE << " km.\n";
+        printDistanceError();
     } else if (city.hasRoad(from, to)) {
-        cout << "  Error: a road between these two locations already exists.\n";
+        printError("A road between these two locations already exists.");
     } else {
         city.addRoad(from, to, distance);
-        cout << "  Road added: " << city.getName(from) << " <-> " << city.getName(to)
-             << " (" << distance << " km)\n";
+        printSuccess("Road added: " + city.getName(from) + " " + twoWay() + " " +
+                     city.getName(to) + " (" + formatNumber(distance) + " km)");
         saveChanges(city);
     }
 }
@@ -242,20 +327,13 @@ void addRoad(Graph& city)
 // Option 6: show all roads in a table.
 void showRoads(const Graph& city)
 {
-    vector<Road> roads = city.getRoads();
-    if (roads.empty()) {
-        cout << "  No roads yet.\n";
+    printScreenHeader("ROADS", "Show Roads");
+    if (city.roadCount() == 0) {
+        printWarning("No roads yet. Choose option 5 to add one.");
         return;
     }
-
-    cout << "\n  " << left << setw(6) << "From" << setw(22) << "Name"
-         << setw(6) << "To" << setw(22) << "Name" << "Distance (km)\n";
-    cout << "  " << string(69, '-') << "\n";
-    for (const Road& road : roads) {
-        cout << "  " << left << setw(6) << road.from << setw(22) << city.getName(road.from)
-             << setw(6) << road.to << setw(22) << city.getName(road.to)
-             << road.distance << "\n";
-    }
+    printRoadsTable(city);
+    printHint(to_string(city.roadCount()) + " road(s) in the city. Every road is two-way.");
 }
 
 // Asks for the two location IDs of an existing road.
@@ -265,8 +343,8 @@ bool readExistingRoad(const Graph& city, int& from, int& to)
     from = readInt("From location ID: ");
     to = readInt("To location ID: ");
     if (!city.hasRoad(from, to)) {
-        cout << "  Error: there is no road between location " << from
-             << " and location " << to << ".\n";
+        printError("There is no road between location " + to_string(from) + " and location " +
+                   to_string(to) + ".");
         return false;
     }
     return true;
@@ -275,13 +353,15 @@ bool readExistingRoad(const Graph& city, int& from, int& to)
 // Option 7: change the distance of a road.
 void updateRoad(Graph& city)
 {
+    printScreenHeader("ROADS", "Update Road Distance");
     if (city.roadCount() == 0) {
-        cout << "  No roads yet.\n";
+        printWarning("No roads yet.");
         return;
     }
 
-    showRoads(city);
-    cout << "\n";
+    printRoadsTable(city);
+    printHint("Enter the two location IDs of the road, in either order.");
+    printBlankLine();
     int from;
     int to;
     if (!readExistingRoad(city, from, to)) {
@@ -289,28 +369,30 @@ void updateRoad(Graph& city)
     }
 
     double distance = readDouble("New distance in km: ");
+    printBlankLine();
     if (!isValidDistance(distance)) {
-        cout << "  Error: the distance must be greater than 0 and at most "
-             << MAX_ROAD_DISTANCE << " km.\n";
+        printDistanceError();
         return;
     }
 
     city.updateRoad(from, to, distance);
-    cout << "  Road " << city.getName(from) << " <-> " << city.getName(to)
-         << " now has a distance of " << distance << " km.\n";
+    printSuccess("Road " + city.getName(from) + " " + twoWay() + " " + city.getName(to) +
+                 " now has a distance of " + formatNumber(distance) + " km.");
     saveChanges(city);
 }
 
 // Option 8: delete a road.
 void deleteRoad(Graph& city)
 {
+    printScreenHeader("ROADS", "Delete Road");
     if (city.roadCount() == 0) {
-        cout << "  No roads yet.\n";
+        printWarning("No roads yet.");
         return;
     }
 
-    showRoads(city);
-    cout << "\n";
+    printRoadsTable(city);
+    printHint("Enter the two location IDs of the road. The locations are kept.");
+    printBlankLine();
     int from;
     int to;
     if (!readExistingRoad(city, from, to)) {
@@ -318,7 +400,9 @@ void deleteRoad(Graph& city)
     }
 
     city.removeRoad(from, to);
-    cout << "  Road " << city.getName(from) << " <-> " << city.getName(to) << " deleted.\n";
+    printBlankLine();
+    printSuccess("Road " + city.getName(from) + " " + twoWay() + " " + city.getName(to) +
+                 " deleted.");
     saveChanges(city);
 }
 
@@ -328,24 +412,37 @@ void deleteRoad(Graph& city)
 // (every location followed by the locations it is connected to).
 void showNetwork(const Graph& city)
 {
+    printScreenHeader("NETWORK", "City Network (Adjacency List)");
     if (city.locationCount() == 0) {
-        cout << "  The network is empty.\n";
+        printWarning("The network is empty.");
         return;
     }
+    printHint("Each location is followed by the locations it is directly connected to.");
+    printBlankLine();
 
-    cout << "\n";
+    string branch = colorsOn() ? "├─ " : "|- ";
+    string lastBranch = colorsOn() ? "└─ " : "`- ";
+
     for (int id : city.getLocationIds()) {
-        cout << "  [" << id << "] " << city.getName(id) << "\n";
-
         vector<Edge> roads = city.getNeighbors(id);
+        cout << "  " << paint(idText(id), Color::Blue) << " " << paint(city.getName(id), Color::Title)
+             << "  " << paint("(" + to_string(roads.size()) + " road(s))", Color::Muted) << "\n";
+
         if (roads.empty()) {
-            cout << "        (no roads)\n";
+            cout << "      " << paint("(no roads)", Color::Warning) << "\n";
         }
-        for (const Edge& edge : roads) {
-            cout << "        <-> " << city.getName(edge.to) << " [" << edge.to << "]  "
-                 << edge.distance << " km\n";
+        for (size_t i = 0; i < roads.size(); i++) {
+            const Edge& edge = roads[i];
+            string symbol = (i + 1 == roads.size()) ? lastBranch : branch;
+            cout << "      " << paint(symbol, Color::Muted)
+                 << cell(nameWithId(city, edge.to), 34, Color::Normal)
+                 << paint(formatNumber(edge.distance) + " km", Color::Purple) << "\n";
         }
     }
+    printBlankLine();
+    printLine();
+    printHint(to_string(city.locationCount()) + " location(s), " + to_string(city.roadCount()) +
+              " road(s).");
 }
 
 // ===== Traversal (BFS and DFS) =====
@@ -355,17 +452,24 @@ void showNetwork(const Graph& city)
 void traverseNetwork(const Graph& city, bool useBfs)
 {
     string algorithmName = useBfs ? "BFS (Breadth-First Search)" : "DFS (Depth-First Search)";
+    printScreenHeader("ALGORITHMS", useBfs ? "BFS Traversal" : "DFS Traversal");
 
     if (city.locationCount() == 0) {
-        cout << "  The network is empty. Add some locations first.\n";
+        printWarning("The network is empty. Add some locations first.");
         return;
     }
 
-    showLocations(city);
-    cout << "\n";
+    if (useBfs) {
+        printHint("BFS visits the nearest locations first, level by level (uses a queue).");
+    } else {
+        printHint("DFS follows one path as far as possible, then goes back (uses recursion).");
+    }
+    printBlankLine();
+    printLocationsTable(city);
+    printBlankLine();
     int start = readInt("Start location ID: ");
     if (!city.hasLocation(start)) {
-        cout << "  Error: location " << start << " does not exist.\n";
+        printError("Location " + to_string(start) + " does not exist.");
         return;
     }
 
@@ -377,40 +481,50 @@ void traverseNetwork(const Graph& city, bool useBfs)
     }
 
     // The visiting order, one location per line.
-    cout << "\n  " << algorithmName << " from " << city.getName(start)
-         << " [" << start << "]\n\n";
+    printBlankLine();
+    printSectionTitle(algorithmName + " from " + nameWithId(city, start), Color::Title);
     for (size_t i = 0; i < order.size(); i++) {
-        cout << "  " << right << setw(3) << (i + 1) << ". " << city.getName(order[i])
-             << " [" << order[i] << "]\n";
+        ostringstream number;
+        number << setw(4) << (i + 1) << ".";
+        cout << "  " << paint(number.str(), Color::Blue) << " " << nameWithId(city, order[i])
+             << "\n";
     }
 
     // The same order on one line, e.g.  BUBT -> Mirpur 10 -> Farmgate
-    cout << "\n  Order: ";
-    for (size_t i = 0; i < order.size(); i++) {
-        if (i > 0) {
-            cout << " -> ";
-        }
-        cout << city.getName(order[i]);
+    printBlankLine();
+    printSectionTitle("Order", Color::Cyan);
+    vector<string> names;
+    for (int id : order) {
+        names.push_back(city.getName(id));
     }
-    cout << "\n\n  Reached " << order.size() << " of " << city.locationCount()
-         << " location(s).\n";
+    printChain(names, Color::Title);
+    printBlankLine();
+
+    string reached = "Reached " + to_string(order.size()) + " of " +
+                     to_string(city.locationCount()) + " location(s).";
+    if (static_cast<int>(order.size()) == city.locationCount()) {
+        printSuccess(reached);
+        return;
+    }
 
     // Locations that were never visited cannot be reached from the start:
     // they are in a different part of the network (disconnected).
-    if (static_cast<int>(order.size()) < city.locationCount()) {
-        cout << "  Not reachable from " << city.getName(start) << ":";
-        for (int id : city.getLocationIds()) {
-            bool wasVisited = false;
-            for (int visitedId : order) {
-                if (visitedId == id) {
-                    wasVisited = true;
-                }
-            }
-            if (!wasVisited) {
-                cout << " " << city.getName(id) << " [" << id << "]";
+    printWarning(reached);
+    vector<string> unreachable;
+    for (int id : city.getLocationIds()) {
+        bool wasVisited = false;
+        for (int visitedId : order) {
+            if (visitedId == id) {
+                wasVisited = true;
             }
         }
-        cout << "\n";
+        if (!wasVisited) {
+            unreachable.push_back(nameWithId(city, id));
+        }
+    }
+    cout << "  " << paint("Not reachable from " + city.getName(start) + ":", Color::Warning) << "\n";
+    for (const string& name : unreachable) {
+        cout << "    " << paint("- " + name, Color::Warning) << "\n";
     }
 }
 
@@ -430,56 +544,67 @@ double roadDistance(const Graph& city, int from, int to)
 // Option 12: find the shortest route between two locations.
 void findShortestRoute(const Graph& city)
 {
+    printScreenHeader("ALGORITHMS", "Dijkstra's Shortest Route");
     if (city.locationCount() == 0) {
-        cout << "  The network is empty. Add some locations first.\n";
+        printWarning("The network is empty. Add some locations first.");
         return;
     }
 
-    showLocations(city);
-    cout << "\n";
+    printHint("Finds the route with the smallest total distance (not the fewest roads).");
+    printBlankLine();
+    printLocationsTable(city);
+    printBlankLine();
     int start = readInt("Start location ID: ");
     if (!city.hasLocation(start)) {
-        cout << "  Error: location " << start << " does not exist.\n";
+        printError("Location " + to_string(start) + " does not exist.");
         return;
     }
     int destination = readInt("Destination location ID: ");
     if (!city.hasLocation(destination)) {
-        cout << "  Error: location " << destination << " does not exist.\n";
+        printError("Location " + to_string(destination) + " does not exist.");
         return;
     }
 
     RouteResult route = dijkstra(city, start, destination);
+    printBlankLine();
     if (!route.found) {
-        cout << "\n  No route exists between these locations.\n";
-        cout << "  (" << city.getName(start) << " and " << city.getName(destination)
-             << " are in different parts of the network.)\n";
+        printWarning("No route exists between these locations.");
+        printHint("(" + city.getName(start) + " and " + city.getName(destination) +
+                  " are in different parts of the network.)");
         return;
     }
 
-    // The route on one line, e.g.  BUBT [1] -> Mirpur 10 [2] -> Agargaon [4]
-    cout << "\n  Shortest Route:\n  ";
-    for (size_t i = 0; i < route.path.size(); i++) {
-        if (i > 0) {
-            cout << " -> ";
-        }
-        cout << city.getName(route.path[i]) << " [" << route.path[i] << "]";
+    // The route, e.g.  BUBT [1] -> Mirpur 10 [2] -> Agargaon [4]
+    printSectionTitle("Shortest Route", Color::Title);
+    vector<string> stops;
+    for (int id : route.path) {
+        stops.push_back(nameWithId(city, id));
     }
-    cout << "\n";
+    printChain(stops, Color::Success);
 
     // Each road of the route with its own distance.
     if (route.path.size() > 1) {
-        cout << "\n";
+        printBlankLine();
+        printSectionTitle("Road by Road", Color::Cyan);
         for (size_t i = 0; i + 1 < route.path.size(); i++) {
             int from = route.path[i];
             int to = route.path[i + 1];
-            cout << "    " << left << setw(22) << city.getName(from) << " -> "
-                 << setw(22) << city.getName(to) << right << setw(8)
-                 << roadDistance(city, from, to) << " km\n";
+            ostringstream number;
+            number << setw(3) << (i + 1) << ".";
+            cout << "  " << paint(number.str(), Color::Blue) << " "
+                 << cell(city.getName(from), 22, Color::Normal) << paint(arrow(), Color::Muted)
+                 << " " << cell(city.getName(to), 22, Color::Normal)
+                 << paint(formatNumber(roadDistance(city, from, to)) + " km", Color::Purple)
+                 << "\n";
         }
     }
 
-    cout << "\n  Total Distance: " << route.distance << " km  ("
-         << route.path.size() - 1 << " road(s))\n";
+    printBlankLine();
+    printLine();
+    cout << "  " << paint("Total Distance: ", Color::Title)
+         << paint(formatNumber(route.distance) + " km", Color::Success) << "  "
+         << paint("(" + to_string(route.path.size() - 1) + " road(s))", Color::Muted) << "\n";
+    printLine();
 }
 
 // ===== Minimum spanning tree (Kruskal) =====
@@ -487,102 +612,256 @@ void findShortestRoute(const Graph& city)
 // Option 13: select the shortest set of roads that connects all locations.
 void showMinimumSpanningTree(const Graph& city)
 {
+    printScreenHeader("ALGORITHMS", "Kruskal's Minimum Spanning Tree");
     if (city.locationCount() == 0) {
-        cout << "  The network is empty. Add some locations first.\n";
+        printWarning("The network is empty. Add some locations first.");
         return;
     }
+
+    printHint("Selects existing roads that connect all locations with the smallest");
+    printHint("total distance, without any cycle (DSU detects cycles).");
+    printBlankLine();
 
     SpanningResult tree = kruskal(city);
 
     if (tree.connected) {
-        cout << "  Minimum Spanning Tree (Kruskal)\n";
+        printSectionTitle("Minimum Spanning Tree (Kruskal)", Color::Title);
     } else {
-        cout << "  Minimum Spanning Forest (Kruskal)\n";
+        printSectionTitle("Minimum Spanning Forest (Kruskal)", Color::Warning);
     }
 
     if (tree.roads.empty()) {
-        cout << "\n  No roads were selected";
+        string text = "No roads were selected";
         if (city.roadCount() == 0) {
-            cout << " (the city has no roads)";
+            text += " (the city has no roads)";
         }
-        cout << ".\n";
+        printWarning(text + ".");
     } else {
-        cout << "\n  " << left << setw(4) << "#" << setw(54) << "Road" << "Distance\n";
-        cout << "  " << string(68, '-') << "\n";
+        const vector<int> widths = {5, 52, 13};
+        printTableRow({"#", "Road", "Distance"}, widths, Color::Cyan);
+        printLine();
         int number = 1;
         for (const Road& road : tree.roads) {
-            string roadText = city.getName(road.from) + " [" + to_string(road.from) + "] <-> " +
-                              city.getName(road.to) + " [" + to_string(road.to) + "]";
-            cout << "  " << left << setw(4) << number << setw(54) << roadText
-                 << road.distance << " km\n";
+            string roadText = nameWithId(city, road.from) + " " + twoWay() + " " +
+                              nameWithId(city, road.to);
+            cout << "  " << cell(to_string(number), widths[0], Color::Blue)
+                 << cell(roadText, widths[1], Color::Normal)
+                 << cell(formatNumber(road.distance) + " km", widths[2], Color::Purple) << "\n";
             number++;
         }
+        printLine();
     }
 
-    cout << "\n  Selected roads: " << tree.roads.size() << " of " << city.roadCount() << "\n";
-    cout << "  Total distance: " << tree.totalDistance << " km\n\n";
+    printBlankLine();
+    cout << "  " << paint("Selected roads: ", Color::Title)
+         << paint(to_string(tree.roads.size()) + " of " + to_string(city.roadCount()), Color::Cyan)
+         << "\n";
+    cout << "  " << paint("Total distance: ", Color::Title)
+         << paint(formatNumber(tree.totalDistance) + " km", Color::Success) << "\n\n";
 
     if (tree.connected) {
-        cout << "  The network is connected: these roads connect all "
-             << city.locationCount() << " location(s) with the smallest total distance.\n";
+        printSuccess("The network is connected.");
+        printHint("These roads connect all " + to_string(city.locationCount()) +
+                  " location(s) with the smallest total distance.");
     } else {
-        cout << "  The network is NOT connected: it has " << tree.components
-             << " separate parts (components).\n";
-        cout << "  This is a Minimum Spanning Forest: one minimum tree for each part.\n";
-        cout << "  No existing roads can join the parts together.\n";
+        printWarning("The network is NOT connected: it has " + to_string(tree.components) +
+                     " separate parts (components).");
+        printHint("This is a Minimum Spanning Forest: one minimum tree for each part.");
+        printHint("No existing roads can join the parts together.");
     }
 }
 
-// ===== Main program =====
+// ===== Main menu =====
 
-void showMenu(const Graph& city)
+// One menu entry, e.g. " 1  Add Location", padded to `width` characters.
+string menuItem(int number, const string& text, Color color, int width)
 {
-    cout << "\n----------------- MAIN MENU ----------------------\n";
-    cout << "  Locations: " << city.locationCount()
-         << "    Roads: " << city.roadCount() << "\n\n";
-    cout << "  Locations              Roads\n";
-    cout << "  1. Add location        5. Add road\n";
-    cout << "  2. Show locations      6. Show roads\n";
-    cout << "  3. Rename location     7. Update road distance\n";
-    cout << "  4. Delete location     8. Delete road\n";
-    cout << "\n";
-    cout << "  Network\n";
-    cout << "  9. Show city network\n";
-    cout << "  10. Traverse network using BFS\n";
-    cout << "  11. Traverse network using DFS\n";
-    cout << "  12. Find shortest route (Dijkstra)\n";
-    cout << "  13. Minimum Spanning Tree (Kruskal)\n";
-    cout << "\n";
-    cout << "  0. Exit\n";
-    cout << "--------------------------------------------------\n";
+    string numberText = (number < 10 ? " " : "") + to_string(number);
+    int used = displayWidth(numberText) + 2 + displayWidth(text);
+    return paint(numberText, color) + "  " + text + string(max(0, width - used), ' ');
 }
 
-int main()
+// Two menu entries side by side (an empty `rightText` leaves the right side empty).
+void printMenuRow(int leftNumber, const string& leftText, int rightNumber, const string& rightText,
+                  Color leftColor, Color rightColor)
 {
-    Graph city;
+    if (rightText.empty()) {
+        cout << "   " << menuItem(leftNumber, leftText, leftColor, 0) << "\n";
+        return;
+    }
+    cout << "   " << menuItem(leftNumber, leftText, leftColor, 34)
+         << menuItem(rightNumber, rightText, rightColor, 0) << "\n";
+}
+
+// A category heading with a short line under it; two headings side by side.
+void printMenuHeadings(const string& left, Color leftColor, const string& right, Color rightColor)
+{
+    string line = colorsOn() ? "─" : "-";
+    string leftLine;
+    string rightLine;
+    for (int i = 0; i < 30; i++) {
+        leftLine += line;
+    }
+    for (int i = 0; i < 34; i++) {
+        rightLine += line;
+    }
+    if (right.empty()) {
+        cout << "  " << paint(left, leftColor) << "\n";
+        cout << "  " << paint(leftLine, Color::Muted) << "\n";
+        return;
+    }
+    cout << "  " << paint(fitText(left, 35), leftColor) << paint(right, rightColor) << "\n";
+    cout << "  " << paint(leftLine, Color::Muted) << "     " << paint(rightLine, Color::Muted)
+         << "\n";
+}
+
+void showMenu(const Graph& city, const string& notice)
+{
+    clearScreen();
+    printBanner();
+
+    // Dashboard: the size of the city and where it is saved.
+    string divider = colorsOn() ? "   │   " : "   |   ";
+    cout << "\n   " << paint("LOCATIONS ", Color::Muted)
+         << paint(to_string(city.locationCount()), Color::Title) << paint(divider, Color::Muted)
+         << paint("ROADS ", Color::Muted) << paint(to_string(city.roadCount()), Color::Title)
+         << paint(divider, Color::Muted) << paint("DATA ", Color::Muted) << dataFolder
+         << paint("  (saved automatically)", Color::Muted) << "\n\n";
+
+    printMenuHeadings("LOCATIONS", Color::Cyan, "ROADS", Color::Blue);
+    printMenuRow(1, "Add Location", 5, "Add Road", Color::Cyan, Color::Blue);
+    printMenuRow(2, "Show Locations", 6, "Show Roads", Color::Cyan, Color::Blue);
+    printMenuRow(3, "Rename Location", 7, "Update Road Distance", Color::Cyan, Color::Blue);
+    printMenuRow(4, "Delete Location", 8, "Delete Road", Color::Cyan, Color::Blue);
+    printBlankLine();
+
+    printMenuHeadings("NETWORK & ALGORITHMS", Color::Purple, "", Color::Purple);
+    printMenuRow(9, "Show City Network", 12, "Dijkstra's Shortest Route", Color::Purple,
+                 Color::Purple);
+    printMenuRow(10, "BFS Traversal", 13, "Kruskal's Minimum Spanning Tree", Color::Purple,
+                 Color::Purple);
+    printMenuRow(11, "DFS Traversal", 0, "", Color::Purple, Color::Purple);
+    printBlankLine();
+    cout << "   " << menuItem(0, "Exit", Color::Error, 0) << "\n";
+
+    printLine();
+    printHint("Graph: adjacency list  |  BFS, DFS, Dijkstra, Kruskal + DSU  |  C++17");
+    printBlankLine();
+
+    if (!notice.empty()) {
+        printError(notice);
+    }
+}
+
+// ===== Start and exit =====
+
+// Chooses the data folder: "data" in the current folder if it is there,
+// otherwise the project's "data" folder next to the program (for example
+// when the program is started from inside build-mingw).
+void chooseDataFolder(const char* programPath)
+{
+    vector<string> candidates = {"data"};
+
+    error_code error;
+    filesystem::path program = filesystem::absolute(programPath, error);
+    if (!error) {
+        filesystem::path programFolder = program.parent_path();
+        candidates.push_back((programFolder / "data").lexically_normal().string());
+        candidates.push_back((programFolder.parent_path() / "data").lexically_normal().string());
+    }
+
+    dataFolder = findDataFolder(candidates);
+
+    // Show a long folder path relative to the current folder, e.g. "..\data".
+    filesystem::path relative =
+        filesystem::path(dataFolder).lexically_relative(filesystem::current_path(error));
+    if (!error && !relative.empty() && relative.string().size() < dataFolder.size()) {
+        dataFolder = relative.string();
+    }
+
+    locationsFile = (filesystem::path(dataFolder) / "locations.csv").string();
+    roadsFile = (filesystem::path(dataFolder) / "roads.csv").string();
+    nextIdFile = (filesystem::path(dataFolder) / "next_id.txt").string();
+}
+
+// The exit screen uses the terminal's own background, so the terminal looks
+// normal again after the program ends.
+void showExitScreen(const Graph& city)
+{
+    leaveTheme();
+    cout << "\n  " << paint("SMART CITY ROUTE & INFRASTRUCTURE PLANNER", Color::Cyan)
+         << paint("  |  Team Quad Core", Color::Purple) << "\n\n";
+    printSuccess("Your city is saved: " + to_string(city.locationCount()) + " location(s), " +
+                 to_string(city.roadCount()) + " road(s).");
+    printHint("Data folder: " + dataFolder);
+    printBlankLine();
+    cout << "  " << paint("Thank you for using the Smart City Planner. Goodbye!", Color::Cyan)
+         << "\n\n";
+}
+
+int main(int argc, char* argv[])
+{
+    // "--plain" switches off colours (useful for old terminals or screenshots).
+    bool plain = false;
+    for (int i = 1; i < argc; i++) {
+        if (string(argv[i]) == "--plain") {
+            plain = true;
+        }
+    }
+    initConsole(plain);
 
     // Show every decimal number with 2 digits after the point, e.g. 4.50
     cout << fixed << setprecision(2);
 
-    cout << "==================================================\n";
-    cout << "    SMART CITY ROUTE & INFRASTRUCTURE PLANNER\n";
-    cout << "    Team Quad Core - CSE 232 Algorithms Project\n";
-    cout << "==================================================\n";
+    chooseDataFolder(argv[0]);
 
-    // Load the saved city and show any problems found in the files.
+    // First run: if no working files exist yet, start with the sample city.
+    // Existing data is never overwritten.
+    bool sampleCopied = initializeFromSample((filesystem::path(dataFolder) / "sample").string(),
+                                             locationsFile, roadsFile, nextIdFile);
+
+    // Load the saved city and collect any problems found in the files.
+    Graph city;
     vector<string> messages;
-    loadCity(city, LOCATIONS_FILE, ROADS_FILE, NEXT_ID_FILE, messages);
-    for (const string& message : messages) {
-        cout << "  Note: " << message << "\n";
+    loadCity(city, locationsFile, roadsFile, nextIdFile, messages);
+
+    // A short start screen, only when there is something to report.
+    if (sampleCopied || !messages.empty() || dataFolder != "data") {
+        clearScreen();
+        printBanner();
+        printBlankLine();
+        if (dataFolder != "data") {
+            printInfo("Using the project's data folder: " + dataFolder);
+        }
+        if (sampleCopied) {
+            printInfo("First run: no saved city was found, so the sample city was loaded");
+            printHint("         (" + to_string(city.locationCount()) + " locations, " +
+                      to_string(city.roadCount()) + " roads). Your changes are saved as usual.");
+        }
+        for (const string& message : messages) {
+            printWarning(message);
+        }
+        printInfo("Loaded " + to_string(city.locationCount()) + " location(s) and " +
+                  to_string(city.roadCount()) + " road(s).");
+        waitForEnter("Press Enter to open the main menu...");
     }
-    cout << "  Loaded " << city.locationCount() << " location(s) and "
-         << city.roadCount() << " road(s).\n";
 
+    string notice;   // an error shown under the menu (for example a wrong option)
     while (true) {
-        showMenu(city);
+        showMenu(city, notice);
+        notice = "";
         int choice = readInt("Choose an option: ");
-        cout << "\n";
 
+        if (choice == 0) {
+            showExitScreen(city);
+            break;
+        }
+        if (choice < 0 || choice > 13) {
+            notice = "Please choose a number from the menu.";
+            continue;
+        }
+
+        clearScreen();
         if (choice == 1) {
             addLocation(city);
         } else if (choice == 2) {
@@ -609,12 +888,8 @@ int main()
             findShortestRoute(city);
         } else if (choice == 13) {
             showMinimumSpanningTree(city);
-        } else if (choice == 0) {
-            cout << "Goodbye!\n";
-            break;
-        } else {
-            cout << "  Please choose a number from the menu.\n";
         }
+        waitForEnter();
     }
 
     return 0;

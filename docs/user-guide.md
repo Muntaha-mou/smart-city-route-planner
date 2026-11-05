@@ -29,8 +29,10 @@ cmake --build build-mingw
 The program is created as `build-mingw\SmartCityPlanner.exe`. After changing
 the code, run only `cmake --build build-mingw` again.
 
-**3. Copy the sample data (optional, first run only).** Each file is copied
-only if it does not exist yet, so your saved data is never overwritten:
+**3. Copy the sample data (optional, first run only).** The program does this
+itself on the first run (see section 7), so this step is not required. Each
+file is copied only if it does not exist yet, so your saved data is never
+overwritten:
 
 ```cmd
 if not exist data mkdir data
@@ -40,7 +42,9 @@ if not exist data\next_id.txt copy data\sample\next_id.txt data\next_id.txt
 ```
 
 **4. Start the program** from the project folder (the folder that contains
-`data`), because the program finds its data files from the current folder:
+`data`). If you start it from somewhere else (for example inside
+`build-mingw`, or by double-clicking the `.exe`), it uses the project's `data`
+folder next to the program and shows which folder it uses:
 
 ```cmd
 build-mingw\SmartCityPlanner.exe
@@ -58,34 +62,66 @@ To build with PowerShell or with the optional Ninja generator, see the README.
 
 ## 2. Main Menu
 
+The main menu is a dashboard: a title box, the number of locations and roads,
+the data folder, and the options grouped by category. In plain-text mode it
+looks like this (in colour mode the same layout uses colours and box lines):
+
 ```
------------------ MAIN MENU ----------------------
-  Locations: 4    Roads: 3
+  +====================================================================+
+  |                                                                    |
+  |             SMART CITY ROUTE & INFRASTRUCTURE PLANNER              |
+  |                      Algorithms Lab - CSE 232                      |
+  |                           Team Quad Core                           |
+  |                                                                    |
+  +====================================================================+
 
-  Locations              Roads
-  1. Add location        5. Add road
-  2. Show locations      6. Show roads
-  3. Rename location     7. Update road distance
-  4. Delete location     8. Delete road
+   LOCATIONS 10   |   ROADS 14   |   DATA data  (saved automatically)
 
-  Network
-  9. Show city network
-  10. Traverse network using BFS
-  11. Traverse network using DFS
-  12. Find shortest route (Dijkstra)
-  13. Minimum Spanning Tree (Kruskal)
+  LOCATIONS                          ROADS
+  ------------------------------     ----------------------------------
+    1  Add Location                   5  Add Road
+    2  Show Locations                 6  Show Roads
+    3  Rename Location                7  Update Road Distance
+    4  Delete Location                8  Delete Road
 
-  0. Exit
---------------------------------------------------
-Choose an option:
+  NETWORK & ALGORITHMS
+  ------------------------------
+    9  Show City Network             12  Dijkstra's Shortest Route
+   10  BFS Traversal                 13  Kruskal's Minimum Spanning Tree
+   11  DFS Traversal
+
+    0  Exit
+  ----------------------------------------------------------------------
+  Graph: adjacency list  |  BFS, DFS, Dijkstra, Kruskal + DSU  |  C++17
+
+  > Choose an option:
 ```
 
 Type the number of an option and press **Enter**. If you type something that is
-not a whole number (for example `abc` or `2x`), the program asks again.
+not a whole number (for example `abc` or `2x`), the program asks again. A number
+that is not on the menu is shown as an error under the menu.
 
-Start the program from the **project folder**, so that it finds the `data`
-folder. When it starts, it loads the saved city and shows how many locations
-and roads were loaded.
+Each option opens its own screen with a title line (for example
+`SMART CITY PLANNER > ALGORITHMS > BFS Traversal`). When the screen is
+finished, press **Enter** to return to the main menu.
+
+**Messages** start with a coloured tag: `[ OK ]` (green) for success,
+`[ERROR]` (red) for invalid input, `[ WARN ]` (yellow) for warnings such as a
+disconnected network, and `[ INFO ]` (cyan) for information. Deleting a
+location shows a red `[DELETE]` warning before asking for confirmation.
+
+### Colours and plain-text mode
+
+- In Windows Terminal or the Windows console (Windows 10/11), the program uses
+  a **dark navy theme**: white titles, cyan and blue accents, purple numbers,
+  green results, red errors and yellow warnings.
+- If the terminal cannot show colours, or the output is redirected to a file,
+  the program automatically uses **plain text** with ASCII borders and does not
+  clear the screen or wait for Enter.
+- To choose plain text yourself, start the program with `--plain`
+  (`build-mingw\SmartCityPlanner.exe --plain`) or set the `NO_COLOR`
+  environment variable.
+- When you exit, the terminal returns to its normal colours.
 
 ## 3. Adding and Showing Locations
 
@@ -124,13 +160,17 @@ and roads were loaded.
 Shows the network as an **adjacency list**: each location followed by the
 locations it is directly connected to, with the road distances.
 
+Example (sample data, plain-text mode; colour mode uses tree lines):
+
 ```
-  [1] BUBT
-        <-> Mirpur 10 [2]  2.50 km
-        <-> Uttara [4]  3.80 km
-  [2] Mirpur 10
-        <-> BUBT [1]  2.50 km
-        <-> Agargaon [3]  4.20 km
+  [1] BUBT  (2 road(s))
+      |- Mirpur 10 [2]                     2.50 km
+      `- Mirpur 1 [3]                      2.00 km
+  [2] Mirpur 10  (4 road(s))
+      |- BUBT [1]                          2.50 km
+      |- Mirpur 1 [3]                      2.20 km
+      |- Agargaon [4]                      4.50 km
+      `- Airport [9]                       8.50 km
 ```
 
 ## 6. Editing and Deleting
@@ -154,18 +194,25 @@ locations it is directly connected to, with the road distances.
 - The city is stored in `data/locations.csv`, `data/roads.csv` and
   `data/next_id.txt` (the ID for the next new location).
 - It is **loaded automatically** when the program starts and **saved
-  automatically** after every successful change; `(Saved)` is printed each time.
-- If the files do not exist yet, the program starts with an empty city.
+  automatically** after every successful change; `Saved automatically to the
+  data folder.` is printed each time.
+- **First run:** if none of the three files exists yet, the program copies the
+  sample city (10 locations, 14 roads) from `data/sample/` and shows
+  `First run: no saved city was found, so the sample city was loaded` on the
+  start screen. If any of the files exists, nothing is copied, so your saved
+  city is never replaced. (If the sample files are missing too, the program
+  starts with an empty city.)
+- The program uses the `data` folder in the folder it is started in, or, if
+  there is none, the project's `data` folder next to the program.
 - If a file contains invalid lines, each one is skipped and a note such as
   `data/locations.csv line 3: the name "BUBT" is used twice. Line skipped.` is
   shown. The next save rewrites the files without the skipped lines.
 - If `next_id.txt` is missing or invalid, the program uses "highest location
   ID + 1" and shows a note.
 
-To start with the illustrative sample network (10 Dhaka locations, 14 roads),
-copy the three sample files before starting the program, as shown in step 3 of
-section 1 (CMD; existing files are kept). In PowerShell, this command copies
-them too, but it **replaces** any working files already in `data`:
+To start again with the illustrative sample network (10 Dhaka locations, 14
+roads) later, copy the three sample files before starting the program. In
+PowerShell, this command **replaces** any working files already in `data`:
 
 ```powershell
 Copy-Item data\sample\* data\
@@ -175,8 +222,8 @@ The sample distances are illustrative values, not measured distances.
 
 ## 8. Exploring the Network (BFS and DFS)
 
-- **Traverse network using BFS (10)** and **Traverse network using DFS (11)**
-  show the locations in the table, then ask for a **start location ID**.
+- **BFS Traversal (10)** and **DFS Traversal (11)** show the locations in the
+  table, then ask for a **start location ID**.
 - The program prints the locations in the order the algorithm visits them
   (with names and IDs), the same order on one line, and how many locations
   were reached.
@@ -193,25 +240,31 @@ Example (sample data, BFS from BUBT):
 
 ```
   BFS (Breadth-First Search) from BUBT [1]
+  --------------------------------------------
+     1. BUBT [1]
+     2. Mirpur 10 [2]
+     3. Mirpur 1 [3]
+     4. Agargaon [4]
+     5. Airport [9]
+     ...
 
-    1. BUBT [1]
-    2. Mirpur 10 [2]
-    3. Mirpur 1 [3]
-    4. Agargaon [4]
-    5. Airport [9]
-    ...
+  Order
+  ---------
+  BUBT -> Mirpur 10 -> Mirpur 1 -> Agargaon -> Airport -> Mohammadpur ->
+  Farmgate -> Uttara -> Gulshan -> Dhanmondi
 
-  Order: BUBT -> Mirpur 10 -> Mirpur 1 -> Agargaon -> Airport -> Mohammadpur -> ...
-
-  Reached 10 of 10 location(s).
+  [ OK ] Reached 10 of 10 location(s).
 ```
+
+If some locations cannot be reached, the result line is a yellow `[ WARN ]`
+and the unreachable locations are listed below it.
 
 See [algorithms.md](algorithms.md) for how BFS and DFS work.
 
 ## 9. Finding the Shortest Route (Dijkstra)
 
-- **Find shortest route (12)** shows the locations, then asks for the **start
-  location ID** and the **destination location ID**.
+- **Dijkstra's Shortest Route (12)** shows the locations, then asks for the
+  **start location ID** and the **destination location ID**.
 - The program prints the shortest route with names and IDs, each road on the
   route with its distance, and the **total distance** in km.
 - "Shortest" means the smallest **total distance**, not the fewest roads. A
@@ -225,24 +278,30 @@ See [algorithms.md](algorithms.md) for how BFS and DFS work.
 Example (sample data, from BUBT to Gulshan):
 
 ```
-  Shortest Route:
-  BUBT [1] -> Mirpur 10 [2] -> Agargaon [4] -> Farmgate [5] -> Gulshan [10]
+  Shortest Route
+  ------------------
+  BUBT [1] -> Mirpur 10 [2] -> Agargaon [4] -> Farmgate [5] ->
+  Gulshan [10]
 
-    BUBT                   -> Mirpur 10                 2.50 km
-    Mirpur 10              -> Agargaon                  4.50 km
-    Agargaon               -> Farmgate                  3.00 km
-    Farmgate               -> Gulshan                   5.00 km
+  Road by Road
+  ----------------
+    1. BUBT                  -> Mirpur 10             2.50 km
+    2. Mirpur 10             -> Agargaon              4.50 km
+    3. Agargaon              -> Farmgate              3.00 km
+    4. Farmgate              -> Gulshan               5.00 km
 
+  ----------------------------------------------------------------------
   Total Distance: 15.00 km  (4 road(s))
+  ----------------------------------------------------------------------
 ```
 
 See [algorithms.md](algorithms.md) for how Dijkstra's algorithm works.
 
 ## 10. Minimum Spanning Tree (Kruskal)
 
-- **Minimum Spanning Tree (13)** needs no input. It selects existing roads that
-  connect all locations with the **smallest total distance**, without any
-  cycle.
+- **Kruskal's Minimum Spanning Tree (13)** needs no input. It selects existing
+  roads that connect all locations with the **smallest total distance**,
+  without any cycle.
 - The program prints each selected road (both locations with names and IDs)
   and its distance, how many of the city's roads were selected, and the total
   distance.
@@ -257,19 +316,24 @@ Example (sample data):
 
 ```
   Minimum Spanning Tree (Kruskal)
-
-  #   Road                                                  Distance
-  --------------------------------------------------------------------
-  1   BUBT [1] <-> Mirpur 1 [3]                             2.00 km
-  2   Mirpur 10 [2] <-> Mirpur 1 [3]                        2.20 km
+  -----------------------------------
+  #    Road                                                Distance
+  ----------------------------------------------------------------------
+  1    BUBT [1] <-> Mirpur 1 [3]                           2.00 km
+  2    Mirpur 10 [2] <-> Mirpur 1 [3]                      2.20 km
   ...
-  9   Airport [9] <-> Gulshan [10]                          7.00 km
+  9    Airport [9] <-> Gulshan [10]                        7.00 km
+  ----------------------------------------------------------------------
 
   Selected roads: 9 of 14
   Total distance: 35.20 km
 
-  The network is connected: these roads connect all 10 location(s) with the smallest total distance.
+  [ OK ] The network is connected.
+  These roads connect all 10 location(s) with the smallest total distance.
 ```
+
+For a disconnected network the title is **Minimum Spanning Forest** and the
+result is a yellow `[ WARN ]` with the number of components.
 
 The Minimum Spanning Tree is not the same as the shortest route between two
 locations (option 12): it is the cheapest set of roads that keeps the whole
@@ -282,8 +346,9 @@ works.
 |---|---|
 | "'g++' (or 'cmake') is not recognized as an internal or external command" | Add the MinGW `bin` folder (and CMake) to the Windows PATH, then open a new terminal |
 | "libstdc++-6.dll was not found" | Start the program from a terminal where the MinGW `bin` folder is on the PATH |
-| The saved city is not loaded | Start the program from the project folder (the folder that contains `data`) |
-| "Warning: the data could not be saved" | Check that the `data` folder and the CSV files are not read-only or open in another program |
+| The saved city is not loaded | Start the program from the project folder (the folder that contains `data`); the start screen and the dashboard show which data folder is used |
+| "The data could not be saved to the data folder" | Check that the `data` folder and the CSV files are not read-only or open in another program |
+| Strange characters such as `←[38;2;...m` appear | The terminal does not support colours: use `--plain` or set `NO_COLOR` |
 | The program closes when input ends | Expected: pressing Ctrl+Z then Enter ends the input and closes the program |
 
 ---

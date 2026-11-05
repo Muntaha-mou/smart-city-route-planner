@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -1116,6 +1117,75 @@ void testAlgorithmsWithLargeDistances()
     check(isSpanningForest(city, newTree), "the result is still a valid spanning tree");
 }
 
+// ===== Console UI update: data folder and first run =====
+
+void testFindDataFolder()
+{
+    cout << "\nChoosing the data folder\n";
+    filesystem::remove_all("test_data/folders");
+    filesystem::create_directories("test_data/folders/with_sample/sample");
+    filesystem::create_directories("test_data/folders/with_data");
+    writeFile("test_data/folders/with_data/locations.csv", "id,name\n");
+
+    check(findDataFolder({"test_data/folders/none", "test_data/folders/with_sample"}) ==
+              "test_data/folders/with_sample",
+          "a folder with a sample subfolder is found after a missing folder");
+    check(findDataFolder({"test_data/folders/with_data", "test_data/folders/with_sample"}) ==
+              "test_data/folders/with_data",
+          "the first suitable folder wins (current folder before the program's folder)");
+    check(findDataFolder({"test_data/folders/none", "test_data/folders/also_none"}) ==
+              "test_data/folders/none",
+          "if no folder is suitable, the first one is used (as before)");
+}
+
+void testFirstRunSampleData()
+{
+    cout << "\nFirst run: starting with the sample data\n";
+    const string sample = "test_data/firstrun/sample";
+    const string folder = "test_data/firstrun";
+    const string locations = folder + "/locations.csv";
+    const string roads = folder + "/roads.csv";
+    const string nextId = folder + "/next_id.txt";
+
+    filesystem::remove_all(folder);
+    filesystem::create_directories(sample);
+    writeFile(sample + "/locations.csv", "id,name\n1,BUBT\n2,Mirpur 10\n");
+    writeFile(sample + "/roads.csv", "from,to,distance\n1,2,2.5\n");
+    writeFile(sample + "/next_id.txt", "3\n");
+
+    check(initializeFromSample(sample, locations, roads, nextId),
+          "with no working files, the sample is copied");
+    Graph city;
+    vector<string> messages;
+    loadCity(city, locations, roads, nextId, messages);
+    check(city.locationCount() == 2 && city.roadCount() == 1 && messages.empty(),
+          "the copied sample loads: 2 locations, 1 road, no warnings");
+
+    // The user changes the city; a second start must not reset it.
+    city.addLocation("Farmgate");
+    saveCity(city, locations, roads, nextId);
+    check(!initializeFromSample(sample, locations, roads, nextId),
+          "a second start copies nothing (working files exist)");
+    Graph reloaded;
+    loadCity(reloaded, locations, roads, nextId, messages);
+    check(reloaded.locationCount() == 3 && reloaded.nameExists("Farmgate"),
+          "the user's changes are kept (nothing overwritten)");
+
+    // Only one working file exists: not a first run, nothing is created.
+    filesystem::remove(roads);
+    filesystem::remove(nextId);
+    check(!initializeFromSample(sample, locations, roads, nextId),
+          "if any working file exists, nothing is copied");
+    check(!filesystem::exists(roads) && !filesystem::exists(nextId),
+          "the missing working files are not created from the sample");
+
+    // No sample files: nothing happens, the program starts with an empty city.
+    filesystem::remove_all(folder);
+    check(!initializeFromSample(sample, locations, roads, nextId),
+          "without sample files, nothing is copied");
+    check(!filesystem::exists(locations), "no working file is created without a sample");
+}
+
 int main()
 {
     testLocations();
@@ -1148,6 +1218,8 @@ int main()
     testLoadDuplicateLookingNames();
     testMaximumRoadDistance();
     testAlgorithmsWithLargeDistances();
+    testFindDataFolder();
+    testFirstRunSampleData();
 
     cout << "\n" << passed << " passed, " << failed << " failed\n";
 

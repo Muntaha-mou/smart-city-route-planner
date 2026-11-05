@@ -18,6 +18,7 @@ add_executable(SmartCityPlanner
     src/graph.cpp
     src/storage.cpp
     src/algorithms.cpp
+    src/ui.cpp            # colours and screen layout (only used by the menu)
 )
 target_include_directories(SmartCityPlanner PRIVATE include)
 

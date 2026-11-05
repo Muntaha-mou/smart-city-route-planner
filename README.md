@@ -5,7 +5,7 @@ graph and uses graph algorithms to explore the network, find shortest routes
 and plan a minimum road network.
 
 **Team:** Quad Core
-**Course:** CSE 232 — Algorithms project
+**Course:** Algorithms Lab – CSE 232
 
 > **Status:** Milestone S6 (final review) — all planned features are complete:
 > locations and roads can be added, shown, updated and deleted, the city is
@@ -26,6 +26,8 @@ and plan a minimum road network.
 | Explore the network with BFS and DFS | Done (S3) |
 | Shortest route with Dijkstra's algorithm | Done (S4) |
 | Minimum spanning tree with Kruskal's algorithm | Done (S5) |
+| Colour console UI (dark navy theme) with plain-text fallback | Done |
+| Start with the sample city on the first run | Done |
 
 ## Project Structure
 
@@ -34,9 +36,11 @@ CMakeLists.txt      Build instructions for CMake
 include/graph.h     Edge and Road structs, Graph class (declarations)
 include/storage.h   Saving and loading the city (declarations)
 include/algorithms.h  Graph algorithms: BFS, DFS, Dijkstra, Kruskal (declarations)
+include/ui.h        Console colours and screen layout helpers (declarations)
 src/graph.cpp       Graph functions (the city data)
-src/storage.cpp     CSV save and load
+src/storage.cpp     CSV save and load, data folder, first-run sample copy
 src/algorithms.cpp  BFS, DFS, Dijkstra and Kruskal
+src/ui.cpp          Console colours, borders, tables and messages
 src/main.cpp        Menu program: input, output and menu options
 tests/tests.cpp     Automatic checks for the Graph, saving/loading and all algorithms
 data/sample/        Illustrative sample data (10 Dhaka locations, 14 roads)
@@ -45,7 +49,15 @@ future-gui/         Qt 6 GUI prototype (not built; kept for a later version)
 ```
 
 `graph.cpp`, `storage.cpp` and `algorithms.cpp` never print or read the
-keyboard; only `main.cpp` does. This keeps the graph code reusable for a future Qt GUI.
+keyboard; only `main.cpp` (with the helpers in `ui.cpp`) does. This keeps the
+graph code reusable for a future Qt GUI.
+
+**Console colours:** in Windows Terminal or the Windows console (Windows 10/11)
+the program uses a dark navy theme with coloured headings, tables and messages
+(ANSI colours, switched on with the Windows console API). It switches to
+**plain text** automatically if colours are not available or the output is
+redirected to a file. Plain text can also be chosen with
+`SmartCityPlanner.exe --plain` or by setting the `NO_COLOR` environment variable.
 
 ## Data Files
 
@@ -62,12 +74,18 @@ again after every change:
   location, even after a restart. If it is missing or invalid, the program uses
   "highest location ID + 1" and shows a note.
 
-- If the files do not exist, the program starts with an empty city.
+- **First run:** if **none** of the three files exists yet, the program copies
+  the sample city from `data/sample/` (10 locations, 14 roads) and says so on
+  the start screen. If any working file exists, nothing is copied, so saved
+  data is never overwritten. (Without sample files, it starts with an empty
+  city.)
 - Invalid lines (wrong number of values, non-numeric IDs, duplicate IDs or
   names, unknown locations, distances not between 0 and 10,000 km, duplicate
   roads) are skipped, and a note with the line number is shown at start-up.
-- The paths are relative to the folder the program is started in, so start it
-  from the project folder.
+- **Which `data` folder:** the program uses the `data` folder in the folder it
+  is started in. If there is none there, it uses the project's `data` folder
+  next to the program (for example when started from inside `build-mingw` or
+  by double-clicking the `.exe`).
 - These working files are not stored in Git (see `.gitignore`).
 
 **Sample data:** to start with the sample network, copy the three sample files
@@ -161,8 +179,8 @@ if not exist data\roads.csv copy data\sample\roads.csv data\roads.csv
 if not exist data\next_id.txt copy data\sample\next_id.txt data\next_id.txt
 ```
 
-This step is optional: without these files, the program starts with an empty
-city.
+This step is optional: on the first run the program copies the sample files
+itself when none of the working files exists.
 
 ### 6. Run the program
 
@@ -170,9 +188,10 @@ city.
 build-mingw\SmartCityPlanner.exe
 ```
 
-Always start the program from the **project folder** (the folder that contains
-`data`), because it opens the data files with paths relative to the current
-folder. Choose `0` in the menu to exit.
+Start the program from the **project folder** (the folder that contains
+`data`). If it is started from somewhere else, it looks for the project's
+`data` folder next to the program and shows which folder it uses. After each
+screen, press **Enter** to return to the main menu. Choose `0` to exit.
 
 ### 7. Run the automated tests
 

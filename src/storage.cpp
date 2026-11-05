@@ -231,3 +231,55 @@ void loadCity(Graph& city, const string& locationsFile, const string& roadsFile,
     loadRoads(city, roadsFile, messages);
     loadNextId(city, nextIdFile, messages);
 }
+
+// ===== Data folder and first run =====
+
+string findDataFolder(const vector<string>& candidates)
+{
+    error_code error;   // receives problems instead of stopping the program
+    for (const string& folder : candidates) {
+        filesystem::path path(folder);
+        if (filesystem::exists(path / "locations.csv", error) ||
+            filesystem::is_directory(path / "sample", error)) {
+            return folder;
+        }
+    }
+    return candidates.empty() ? "data" : candidates[0];
+}
+
+bool initializeFromSample(const string& sampleFolder, const string& locationsFile,
+                          const string& roadsFile, const string& nextIdFile)
+{
+    error_code error;
+    const vector<string> workingFiles = {locationsFile, roadsFile, nextIdFile};
+    const vector<string> sampleNames = {"locations.csv", "roads.csv", "next_id.txt"};
+
+    // Only on a real first run: if ANY working file exists, do nothing.
+    for (const string& file : workingFiles) {
+        if (filesystem::exists(file, error)) {
+            return false;
+        }
+    }
+    // All three sample files must be there.
+    for (const string& name : sampleNames) {
+        if (!filesystem::exists(filesystem::path(sampleFolder) / name, error)) {
+            return false;
+        }
+    }
+
+    createFolderFor(locationsFile);
+    for (size_t i = 0; i < workingFiles.size(); i++) {
+        // copy_options::none never overwrites: copying fails if the file exists.
+        bool copied = filesystem::copy_file(filesystem::path(sampleFolder) / sampleNames[i],
+                                            workingFiles[i], filesystem::copy_options::none,
+                                            error);
+        if (!copied) {
+            // Undo the files copied in this call, so the next start is a clean first run.
+            for (size_t j = 0; j < i; j++) {
+                filesystem::remove(workingFiles[j], error);
+            }
+            return false;
+        }
+    }
+    return true;
+}

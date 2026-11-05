@@ -76,15 +76,16 @@ so run them from a terminal where the MinGW `bin` folder is on the PATH.
 |---|---|---|
 | `include/graph.h` | `Edge` and `Road` structs, `Graph` class declaration | No |
 | `src/graph.cpp` | The code of the `Graph` functions | No |
-| `include/storage.h`, `src/storage.cpp` | `saveCity()` and `loadCity()`: CSV files | No (returns messages instead) |
+| `include/storage.h`, `src/storage.cpp` | `saveCity()` and `loadCity()`: CSV files; `findDataFolder()` and `initializeFromSample()` | No (returns messages instead) |
 | `include/algorithms.h`, `src/algorithms.cpp` | `bfs()`, `dfs()`, `dijkstra()` and `kruskal()` | No |
+| `include/ui.h`, `src/ui.cpp` | Console colours, borders, tables, messages and prompts (used only by `main.cpp`) | Yes |
 | `src/main.cpp` | Input functions, one function per menu option, `main()` | Yes |
 | `tests/tests.cpp` | Automatic checks for `Graph`, saving/loading, BFS, DFS, Dijkstra and Kruskal | Prints PASS/FAIL |
 
 **Main rule:** `graph.cpp`, `storage.cpp` and `algorithms.cpp` never print and
 never read the keyboard. They only store data and return answers.
-`main.cpp` talks to the user. This lets a future Qt GUI reuse this code
-unchanged.
+`main.cpp` talks to the user, using the screen helpers in `ui.cpp`. This lets
+a future Qt GUI reuse this code unchanged. The tests do not use `ui.cpp`.
 
 ### Data structures (in `graph.h`)
 
@@ -139,6 +140,21 @@ Functions marked `const` only *read* the graph; they never change it.
 | `saveCity(city, locationsFile, roadsFile, nextIdFile)` | Creates the `data` folder if needed, then writes a header line and one line per location (`id,name`) and per road (`from,to,distance`), and the next location ID into `next_id.txt`. Returns `false` if a file cannot be written. |
 | `loadCity(city, locationsFile, roadsFile, nextIdFile, messages)` | Loads locations **first** (roads refer to their IDs), then roads, then the next ID. Each line is split at commas and checked; a bad line is skipped and a message with its line number is added to `messages`. A missing file just leaves the city empty. The saved next ID is used only if it is larger than "highest ID + 1"; otherwise a note is added. |
 | `splitByComma`, `textToInt`, `textToDouble` | Small helpers used only inside `storage.cpp`. |
+| `findDataFolder(candidates)` | Returns the first folder in the list that contains `locations.csv` or a `sample` subfolder; otherwise the first folder. `main()` passes `data` (current folder), then `data` next to the program and in its parent folder, so the program also finds the project data when started from inside `build-mingw`. |
+| `initializeFromSample(sampleFolder, locationsFile, roadsFile, nextIdFile)` | First run: copies the three sample files only if **none** of the working files exists (`copy_options::none` never overwrites). Returns `true` if it copied them. If a copy fails, the files copied in that call are removed again. |
+
+### Console screens (in `ui.cpp`)
+
+| Function | What it does |
+|---|---|
+| `initConsole(forcePlain)` | Checks whether input and output are a real console (`GetConsoleMode`). If so, and `--plain`/`NO_COLOR` is not used, switches on ANSI colour codes (`ENABLE_VIRTUAL_TERMINAL_PROCESSING`) and UTF-8 output, and sets the terminal's default background to the theme navy (OSC 11), so the whole window is navy, including the padding and the empty rows. OSC 111 gives the terminal its own default background back when the program leaves the theme or ends. If that fails, the program stays in **plain mode** (no colours, ASCII borders, no screen clearing). Registers `restoreConsole()` with `atexit` and a Ctrl+C handler. |
+| `paint(text, color)` | Wraps text in the colour code of the theme and switches back to the normal theme style (light text on navy) afterwards. In plain mode it returns the text unchanged. |
+| `clearScreen()`, `printBanner()`, `printScreenHeader()`, `printSectionTitle()`, `printLine()` | The building blocks of every screen. |
+| `printTableRow()`, `fitText()`, `displayWidth()`, `formatNumber()` | Table layout: `fitText` pads or shortens text to a column width (counting a UTF-8 character as one), `formatNumber` gives 2 decimals. |
+| `printChain()` | Prints `A → B → C`, wrapping long chains onto the next line. |
+| `printSuccess/Error/Warning/Info/Hint()` | Messages with the tags `[ OK ]`, `[ERROR]`, `[ WARN ]`, `[ INFO ]`. |
+| `promptText()`, `endInput()`, `waitForEnter()` | Prompts (typed text in bright white) and "Press Enter to return to the main menu" (only when a person is typing). |
+| `leaveTheme()`, `restoreConsole()` | Before exiting, clear the visible navy screen (the scroll-back history is kept) and give the terminal back its normal colours, its original output mode and its original code page (saved in `initConsole()`). This runs exactly once, on a normal exit, after Ctrl+Z, or on Ctrl+C (the Ctrl+C handler writes directly with `WriteConsoleA`, because it runs on another thread). |
 
 ### Algorithms (in `algorithms.cpp`)
 
@@ -169,11 +185,15 @@ See `docs/algorithms.md` for step-by-step explanations and examples.
 | `renameLocation(city)`, `deleteLocation(city)` | Ask for a location ID (and a new name, or a y/n confirmation), check it, then call the `Graph` function. |
 | `updateRoad(city)`, `deleteRoad(city)` | Show the roads, ask for the road's two location IDs (`readExistingRoad`), then call the `Graph` function. |
 | `isValidName(city, name, ownId)` | The name rules shared by add and rename (not empty, no comma, not used by another location, ignoring upper/lower case). The name is trimmed before this check. |
-| `saveChanges(city)` | Called after every successful change; saves the city and prints `(Saved)` or a warning. |
+| `saveChanges(city)` | Called after every successful change; saves the city and prints `Saved automatically to the data folder.` or a warning. |
+| `printLocationsTable(city)`, `printRoadsTable(city)` | The location and road tables used by several screens. |
 | `traverseNetwork(city, useBfs)` | Options 10 and 11. Asks for a start ID, runs `bfs()` or `dfs()`, prints the visiting order with names and IDs, how many locations were reached, and the locations that are not reachable. |
 | `findShortestRoute(city)` | Option 12. Asks for a start and a destination ID, runs `dijkstra()`, and prints the route (names and IDs), each road with its distance (`roadDistance()`), and the total distance, or "No route exists between these locations." |
 | `showMinimumSpanningTree(city)` | Option 13. Runs `kruskal()` and prints the selected roads (names, IDs and distances), how many of the city's roads were selected, the total distance, and whether the result is a Minimum Spanning Tree (connected) or a Minimum Spanning Forest (with the number of components). |
-| `main()` | Creates the `Graph`, loads the saved city (showing any notes), shows the menu in a loop, and calls the function for the chosen option until the user chooses 0. |
+| `showMenu(city, notice)` | The dashboard: banner, number of locations and roads, data folder, the options in three categories, and an error line for a wrong option. |
+| `chooseDataFolder(programPath)` | Builds the list of possible data folders and calls `findDataFolder()`; a long path is shown relative to the current folder (for example `..\data`). |
+| `showExitScreen(city)` | Leaves the navy theme and prints a short goodbye with the number of saved locations and roads. |
+| `main()` | Calls `initConsole()` (option `--plain`), chooses the data folder, copies the sample on the first run, loads the city, shows a start screen if there is something to report (first run, notes, other data folder), then shows the menu in a loop. Each option clears the screen, shows its screen and waits for Enter, until the user chooses 0. |
 
 The menu functions check the user's input and explain any problem; `Graph`
 also refuses invalid data as a safety net.
@@ -203,9 +223,11 @@ exactly V − components roads, the correct total, and the same connected parts
 as the full city. The S6.2 tests check name trimming and case-insensitive
 duplicates (adding, renaming and loading), the 10,000 km distance limit
 (0, negative, infinity, NaN, exactly 10,000 and above), and Dijkstra and
-Kruskal with the largest allowed distances. The save/load tests write
-temporary files into a `test_data`
-folder. `main()` returns 1 if anything failed, so `ctest` reports
+Kruskal with the largest allowed distances. The console UI update added tests
+for `findDataFolder()` and `initializeFromSample()` (sample copied only when
+no working file exists, user changes never overwritten, nothing created when a
+file or the sample is missing): 310 checks in total. The save/load tests write
+temporary files into a `test_data` folder. `main()` returns 1 if anything failed, so `ctest` reports
 the failure.
 
 ## 4. Git Workflow
@@ -227,6 +249,8 @@ the failure.
 | 2026-11-04 | Keep the Qt prototype in `future-gui/`, outside the build | Preserved for the later GUI |
 | 2026-11-04 | Simplified design with separate `include/` and `src/` folders | Every team member must understand and explain all the code |
 | 2026-11-04 | Plain console output (`cout`, `cin`, `setw` tables); no colours, box drawing or Windows-specific console code | Easier to read and explain; works in every terminal |
+| 2026-11-05 | Replaced by a colour console UI at the team lead's request: dark navy theme with ANSI colours, all screen code in `ui.cpp`, automatic plain-text fallback (`--plain`, `NO_COLOR`, redirected output) | A polished, readable interface for the demonstration; one helper module keeps colour codes out of the menu code; plain mode keeps it working in every terminal |
+| 2026-11-05 | First run copies the sample city only when none of the three working files exists; the program also finds the project `data` folder next to the `.exe` | Starting the program from `build-mingw` showed an empty city; existing data must never be overwritten |
 | 2026-11-04 | A location is an automatic ID plus a name | IDs never need to be typed when adding; no extra fields |
 | 2026-11-04 | One weight per road: distance in km | Used by both Dijkstra and Kruskal; easy to explain |
 | 2026-11-04 | At most one road between two locations; roads are two-way | Simple undirected graph |

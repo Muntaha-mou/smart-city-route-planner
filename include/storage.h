@@ -38,4 +38,17 @@ bool saveCity(const Graph& city, const std::string& locationsFile, const std::st
 void loadCity(Graph& city, const std::string& locationsFile, const std::string& roadsFile,
               const std::string& nextIdFile, std::vector<std::string>& messages);
 
+// Chooses the data folder from a list of possible folders (for example
+// "data" in the current folder, then the "data" folder next to the program).
+// Returns the first folder that already contains locations.csv or a "sample"
+// subfolder. If none does, returns the first folder in the list.
+std::string findDataFolder(const std::vector<std::string>& candidates);
+
+// First run: copies the three sample files to the three working files, but
+// ONLY if none of the working files exists yet. Existing files are never
+// overwritten. Returns true if the sample was copied; false if nothing was
+// copied (working data already exists, or a sample file is missing).
+bool initializeFromSample(const std::string& sampleFolder, const std::string& locationsFile,
+                          const std::string& roadsFile, const std::string& nextIdFile);
+
 #endif // STORAGE_H
