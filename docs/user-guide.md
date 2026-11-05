@@ -89,6 +89,7 @@ looks like this (in colour mode the same layout uses colours and box lines):
     9  Show City Network             12  Dijkstra's Shortest Route
    10  BFS Traversal                 13  Kruskal's Minimum Spanning Tree
    11  DFS Traversal
+   14  All-Pairs Shortest Paths (Floyd-Warshall)
 
     0  Exit
   ----------------------------------------------------------------------
@@ -340,7 +341,40 @@ locations (option 12): it is the cheapest set of roads that keeps the whole
 city connected. See [algorithms.md](algorithms.md) for how Kruskal's algorithm
 works.
 
-## 11. Troubleshooting
+## 11. All-Pairs Shortest Paths (Floyd–Warshall)
+
+- **All-Pairs Shortest Paths (14)** calculates the shortest distance between
+  **every** pair of locations at once (Floyd–Warshall algorithm).
+- It shows the locations, then a **distance matrix**: one row and one column
+  per location ID. `0` means the same location and `--` means there is no
+  route (the locations are in different parts of the network).
+- If the city has too many locations for the table to fit on the screen, the
+  program says so and skips the table.
+- Then it asks for a **start location ID** and a **destination location ID**
+  and shows the shortest route, each road with its distance, and the total
+  distance, in the same way as option 12. The distances are always the same
+  as Dijkstra's.
+- If the network is in separate parts, a yellow `[ WARN ]` says so, and a
+  route between the parts is reported as `No route exists between these
+  locations.` An ID that does not exist gives an error message.
+
+Example (sample data, first rows of the matrix):
+
+```
+  Distance Matrix (km)
+  ------------------------
+           [1]   [2]   [3]   [4]   [5]   [6]   [7]   [8]   [9]  [10]
+  ----------------------------------------------------------------------
+  [1]        0  2.50  2.00  7.00 10.00 10.30  7.50 16.50 11.00 15.00
+  [2]     2.50     0  2.20  4.50  7.50 10.50  7.70 14.00  8.50 12.50
+  ...
+```
+
+Row `[1]` (BUBT) shows that Gulshan `[10]` is 15.00 km away, the same as the
+Dijkstra example in section 9. See [algorithms.md](algorithms.md) for how
+Floyd–Warshall works.
+
+## 12. Troubleshooting
 
 | Problem | Solution |
 |---|---|

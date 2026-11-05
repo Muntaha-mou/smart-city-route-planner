@@ -408,7 +408,125 @@ to Gulshan uses the road BUBT–Mirpur 10, which the MST does not include.
 `src/algorithms.cpp`; menu option 13 (`showMinimumSpanningTree()` in
 `src/main.cpp`).
 
-## 6. Complexity Summary
+## 6. Floyd–Warshall: All-Pairs Shortest Paths
+
+**Problem:** what is the shortest distance between **every** pair of
+locations, and what is the route between any two of them?
+
+**Idea (dynamic programming):** number the locations 0, 1, ..., V − 1. Let
+`dist[i][j]` be the shortest distance from i to j when only the first k
+locations may be used as stops **in between**. At the start (k = 0) no stop is
+allowed, so `dist` only knows the direct roads. Then the locations are allowed
+as stops one by one. When location k is allowed, a route from i to j either
+does **not** use k (the old value stays) or goes i → k → j:
+
+```
+dist[i][j] = min( dist[i][j],  dist[i][k] + dist[k][j] )
+```
+
+Both parts `dist[i][k]` and `dist[k][j]` are already the best routes using the
+earlier stops, so each step builds on the results of the previous one. This
+reuse of smaller answers is what makes it **dynamic programming**.
+
+**Steps:**
+
+```
+FloydWarshall(city):
+    give every location a row/column number in increasing ID order
+    dist[i][j] = INFINITY,  next[i][j] = -1        (no route known)
+    dist[i][i] = 0,         next[i][i] = i
+    for each road i - j with length w:
+        dist[i][j] = w,     next[i][j] = j          (go straight to j)
+
+    for k = 0 to V - 1:                 (allow k as a stop)
+        for i = 0 to V - 1:
+            if dist[i][k] is INFINITY: skip i
+            for j = 0 to V - 1:
+                if dist[k][j] is INFINITY: skip j
+                if dist[i][k] + dist[k][j] < dist[i][j]:
+                    dist[i][j] = dist[i][k] + dist[k][j]
+                    next[i][j] = next[i][k]
+```
+
+**Data structures:**
+
+| Name | Type | Meaning |
+|---|---|---|
+| `ids`, `indexOf` | `vector<int>`, `map<int, int>` | row/column number ↔ location ID (IDs can have gaps such as 1, 3, 5, so the ID itself cannot be the row number) |
+| `dist` | `vector<vector<double>>` (V × V) | shortest distance; `INFINITY` = no route |
+| `next` | `vector<vector<int>>` (V × V) | the first stop after i on a shortest route to j; `-1` = no route |
+| `AllPairsResult` | `struct { ids, indexOf, dist, next }` | the answer returned to the menu |
+
+**Unreachable locations:** two locations in different parts of the network
+keep `INFINITY`. The algorithm skips a stop k when `dist[i][k]` or `dist[k][j]`
+is `INFINITY`, so it never calculates `INFINITY + something` and never invents
+a road.
+
+**Route reconstruction:** the `next` matrix stores only the **first stop** of
+each shortest route. To get the whole route from i to j, start at i and jump
+to `next[current][j]` until j is reached. This works because the rest of a
+shortest route is itself a shortest route (from that stop to j). When a
+shorter route through k is found, its first stop is the first stop towards k:
+`next[i][j] = next[i][k]`.
+
+**Complexity:** three nested loops over V locations: **O(V³)** time. The two
+V × V matrices need **O(V²)** memory. Rebuilding one route takes O(V).
+
+**Example** (the Dijkstra test network, locations 1–4):
+
+```
+         4
+    1 ------- 2           roads: 1-2 4 km, 1-3 1 km, 3-2 2 km,
+    |  \      |                  2-4 1 km, 3-4 5 km
+    1    2    1
+    |      \  |
+    3 ------- 4   (3-4 is 5 km)
+```
+
+| Step | Stop allowed | Changes |
+|---|---|---|
+| start | none | direct roads only; 1–4 is ∞ |
+| k = 1 | location 1 | no change |
+| k = 2 | location 2 | 1–4 = 4 + 1 = **5** (via 2); 3–4 = 2 + 1 = **3** (via 2, shorter than 5) |
+| k = 3 | location 3 | 1–2 = 1 + 2 = **3** (via 3, shorter than 4); 1–4 = 1 + 3 = **4** (via 3, shorter than 5) |
+| k = 4 | location 4 | no change |
+
+Final distance matrix (km):
+
+```
+        1    2    3    4
+   1    0    3    1    4
+   2    3    0    2    1
+   3    1    2    0    3
+   4    4    1    3    0
+```
+
+Route 1 → 4: `next[1][4] = 3`, `next[3][4] = 2`, `next[2][4] = 4`, so the route
+is **1 → 3 → 2 → 4, 4 km**: the same answer as Dijkstra.
+
+**Floyd–Warshall compared with Dijkstra:**
+
+| | Dijkstra | Floyd–Warshall |
+|---|---|---|
+| Answers | one start → destination | every pair at once |
+| Method | greedy (closest unfinished location first) | dynamic programming (allow one more stop each step) |
+| Time | O((V + E) log V) for one start | O(V³) for all pairs |
+| Memory | O(V + E) | O(V²) |
+| Best when | a few route questions, large network | many route questions, small network |
+
+Running Dijkstra once from every location also gives all pairs, in
+O(V (V + E) log V). For the small city networks of this project both are fast;
+the tests check that both always give the **same distances**. With several
+equally short routes they can choose different (equally short) routes:
+Floyd–Warshall keeps the first route found (stops are tried in increasing ID
+order and only a strictly shorter route replaces it), so its result is also
+always the same.
+
+**Where in the code:** `floydWarshall()` and `allPairsRoute()` in
+`src/algorithms.cpp`; menu option 14 (`showAllPairsShortestPaths()` in
+`src/main.cpp`).
+
+## 7. Complexity Summary
 
 | Algorithm | Time | Extra memory | Data structures |
 |---|---|---|---|
@@ -416,6 +534,7 @@ to Gulshan uses the road BUBT–Mirpur 10, which the MST does not include.
 | DFS | O(V + E) | O(V) | recursion, set |
 | Dijkstra | O((V + E) log V) | O(V + E) | min-priority queue, maps |
 | Kruskal | O(E log E + V log V); O(E log E) if connected | O(V + E) | sorted vector, DSU |
+| Floyd–Warshall | O(V³) | O(V²) | distance matrix, next-hop matrix |
 
 (BFS and DFS also sort each neighbour list for a stable order, which adds
 O(E log V) in the worst case.)

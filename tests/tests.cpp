@@ -1186,6 +1186,269 @@ void testFirstRunSampleData()
     check(!filesystem::exists(locations), "no working file is created without a sample");
 }
 
+// ===== S8.1: Floyd–Warshall (all-pairs shortest paths) =====
+
+// Compares Floyd–Warshall with Dijkstra for EVERY pair of locations:
+// same "route found or not", same distance, and every Floyd–Warshall route
+// must be made of real roads that add up to the reported distance.
+// Returns true if all pairs agree.
+bool floydMatchesDijkstra(const Graph& city)
+{
+    AllPairsResult table = floydWarshall(city);
+    for (int a : city.getLocationIds()) {
+        for (int b : city.getLocationIds()) {
+            RouteResult fromFloyd = allPairsRoute(table, a, b);
+            RouteResult fromDijkstra = dijkstra(city, a, b);
+            if (fromFloyd.found != fromDijkstra.found) {
+                return false;
+            }
+            if (!fromFloyd.found) {
+                continue;
+            }
+            if (!nearlyEqual(fromFloyd.distance, fromDijkstra.distance) ||
+                fromFloyd.path.front() != a || fromFloyd.path.back() != b ||
+                !isValidRoute(city, fromFloyd.path, fromFloyd.distance)) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+// The distance from location `a` to location `b` in the Floyd–Warshall table.
+double tableDistance(const AllPairsResult& table, int a, int b)
+{
+    return table.dist[table.indexOf.at(a)][table.indexOf.at(b)];
+}
+
+void testFloydWarshallBasics()
+{
+    cout << "\nFloyd-Warshall: special cases\n";
+    Graph empty;
+    AllPairsResult none = floydWarshall(empty);
+    check(none.ids.empty() && none.dist.empty() && none.next.empty(),
+          "an empty city gives an empty table");
+    check(!allPairsRoute(none, 1, 2).found, "an empty city has no route");
+
+    Graph single;
+    single.addLocation("BUBT");
+    AllPairsResult one = floydWarshall(single);
+    check(one.ids == vector<int>{1} && one.dist[0][0] == 0.0, "one location: a 1 x 1 table with 0");
+    RouteResult same = allPairsRoute(one, 1, 1);
+    check(same.found && same.distance == 0.0 && same.path == vector<int>{1},
+          "one location: the route from 1 to 1 is just {1} with distance 0");
+    check(!allPairsRoute(one, 1, 2).found && !allPairsRoute(one, 9, 1).found,
+          "a route with an unknown ID is not found");
+
+    Graph two;
+    two.addLocation("A");
+    two.addLocation("B");
+    two.addRoad(1, 2, 2.5);
+    AllPairsResult pair = floydWarshall(two);
+    check(nearlyEqual(tableDistance(pair, 1, 2), 2.5) && nearlyEqual(tableDistance(pair, 2, 1), 2.5),
+          "two connected locations: 2.5 km in both directions");
+    check(allPairsRoute(pair, 2, 1).path == vector<int>({2, 1}), "the route 2 -> 1 is {2, 1}");
+
+    // A chain 1 - 2 - 3 - 4 with roads of 1, 2 and 3 km.
+    Graph chain;
+    for (int i = 1; i <= 4; i++) {
+        chain.addLocation("C" + to_string(i));
+    }
+    chain.addRoad(1, 2, 1.0);
+    chain.addRoad(2, 3, 2.0);
+    chain.addRoad(3, 4, 3.0);
+    AllPairsResult line = floydWarshall(chain);
+    check(nearlyEqual(tableDistance(line, 1, 4), 6.0) && nearlyEqual(tableDistance(line, 4, 2), 5.0),
+          "chain: 1 -> 4 is 6 km and 4 -> 2 is 5 km");
+    check(allPairsRoute(line, 1, 4).path == vector<int>({1, 2, 3, 4}),
+          "chain: the route 1 -> 4 visits every location {1, 2, 3, 4}");
+}
+
+void testFloydWarshallRoutes()
+{
+    cout << "\nFloyd-Warshall: shortest routes\n";
+    // The Dijkstra test network: a cycle 1-3-2-4 with longer direct roads,
+    // and location 5 without roads.
+    Graph city = makeRouteCity();
+    AllPairsResult table = floydWarshall(city);
+
+    check(table.ids == vector<int>({1, 2, 3, 4, 5}), "rows and columns are the IDs in increasing order");
+    bool diagonalZero = true;
+    bool symmetric = true;
+    for (size_t i = 0; i < table.ids.size(); i++) {
+        diagonalZero = diagonalZero && table.dist[i][i] == 0.0;
+        for (size_t j = 0; j < table.ids.size(); j++) {
+            symmetric = symmetric && (table.dist[i][j] == table.dist[j][i]);
+        }
+    }
+    check(diagonalZero, "every location is 0 km from itself");
+    check(symmetric, "two-way roads: the distance A -> B equals B -> A");
+
+    check(nearlyEqual(tableDistance(table, 1, 2), 3.0), "1 -> 2 is 3 km, shorter than the direct 4 km road");
+    RouteResult longRoute = allPairsRoute(table, 1, 4);
+    check(nearlyEqual(longRoute.distance, 4.0) && longRoute.path == vector<int>({1, 3, 2, 4}),
+          "1 -> 4 is 4 km over 3 roads {1, 3, 2, 4}");
+    check(isValidRoute(city, longRoute.path, longRoute.distance),
+          "the route 1 -> 4 is made of real roads that add up to 4 km");
+    check(allPairsRoute(table, 4, 1).path == vector<int>({4, 2, 3, 1}),
+          "4 -> 1 is the same route backwards: {4, 2, 3, 1}");
+
+    // Location 5 has no roads.
+    check(tableDistance(table, 1, 5) == INFINITY && tableDistance(table, 5, 3) == INFINITY,
+          "location 5 (no roads) is unreachable: the distance is INFINITY");
+    check(table.next[table.indexOf[1]][table.indexOf[5]] == -1, "an unreachable pair has no next stop (-1)");
+    check(!allPairsRoute(table, 1, 5).found, "no route is returned for an unreachable pair");
+    check(floydMatchesDijkstra(city), "every pair: the same distances as Dijkstra, real roads only");
+
+    // Safety net: an inconsistent table never gives an incomplete route.
+    AllPairsResult broken = table;
+    broken.next[broken.indexOf[1]][broken.indexOf[4]] = -1;   // missing first stop
+    check(!allPairsRoute(broken, 1, 4).found, "a table with a missing next stop gives no route (no crash)");
+    AllPairsResult looping = table;
+    looping.next[looping.indexOf[1]][looping.indexOf[4]] = looping.indexOf[1];   // 1 -> 1 -> 1 ...
+    check(!allPairsRoute(looping, 1, 4).found, "a table with a loop gives no route instead of an endless route");
+}
+
+void testFloydWarshallTies()
+{
+    cout << "\nFloyd-Warshall: equally short routes\n";
+    // A square: 1-2-4 and 1-3-4 are both 2 km.
+    Graph square;
+    for (int i = 1; i <= 4; i++) {
+        square.addLocation("S" + to_string(i));
+    }
+    square.addRoad(1, 2, 1.0);
+    square.addRoad(2, 4, 1.0);
+    square.addRoad(1, 3, 1.0);
+    square.addRoad(3, 4, 1.0);
+
+    RouteResult first = allPairsRoute(floydWarshall(square), 1, 4);
+    check(nearlyEqual(first.distance, 2.0) && first.path == vector<int>({1, 2, 4}),
+          "the route through the smaller ID is chosen: {1, 2, 4}");
+    check(allPairsRoute(floydWarshall(square), 1, 4).path == first.path,
+          "running the algorithm again gives the same route");
+
+    // Roads added in a different order give the same result.
+    Graph reordered;
+    for (int i = 1; i <= 4; i++) {
+        reordered.addLocation("S" + to_string(i));
+    }
+    reordered.addRoad(3, 4, 1.0);
+    reordered.addRoad(1, 3, 1.0);
+    reordered.addRoad(2, 4, 1.0);
+    reordered.addRoad(1, 2, 1.0);
+    check(allPairsRoute(floydWarshall(reordered), 1, 4).path == first.path,
+          "the same route when the roads were added in another order");
+
+    // And after saving and loading.
+    check(saveCity(square, TEST_LOCATIONS, TEST_ROADS, TEST_NEXT_ID), "the square is saved");
+    Graph loaded;
+    vector<string> messages;
+    loadCity(loaded, TEST_LOCATIONS, TEST_ROADS, TEST_NEXT_ID, messages);
+    check(allPairsRoute(floydWarshall(loaded), 1, 4).path == first.path,
+          "the same route after saving and loading");
+}
+
+void testFloydWarshallDisconnectedAndGaps()
+{
+    cout << "\nFloyd-Warshall: separate parts and ID gaps\n";
+    // Two parts: 1-2-3 (triangle) and 4-5; location 6 alone.
+    Graph city;
+    for (int i = 1; i <= 6; i++) {
+        city.addLocation("D" + to_string(i));
+    }
+    city.addRoad(1, 2, 1.0);
+    city.addRoad(2, 3, 2.0);
+    city.addRoad(1, 3, 3.0);
+    city.addRoad(4, 5, 4.0);
+    AllPairsResult table = floydWarshall(city);
+    check(nearlyEqual(tableDistance(table, 1, 3), 3.0) && nearlyEqual(tableDistance(table, 5, 4), 4.0),
+          "distances inside each part are correct");
+    check(tableDistance(table, 1, 4) == INFINITY && tableDistance(table, 5, 2) == INFINITY &&
+              tableDistance(table, 6, 1) == INFINITY,
+          "locations in different parts are unreachable (INFINITY)");
+    check(floydMatchesDijkstra(city), "separate parts: every pair agrees with Dijkstra");
+
+    // ID gaps: delete locations 2 and 4, so the IDs are 1, 3, 5, 6.
+    city.removeLocation(2);
+    city.removeLocation(4);
+    AllPairsResult gaps = floydWarshall(city);
+    check(gaps.ids == vector<int>({1, 3, 5, 6}), "IDs with gaps: the rows are 1, 3, 5, 6");
+    check(gaps.indexOf.at(5) == 2 && gaps.indexOf.at(6) == 3, "indexOf maps ID 5 -> row 2 and ID 6 -> row 3");
+    check(nearlyEqual(tableDistance(gaps, 1, 3), 3.0), "after deleting location 2, 1 -> 3 uses the direct 3 km road");
+    city.addRoad(5, 6, 1.5);
+    city.addRoad(3, 5, 2.0);
+    check(nearlyEqual(tableDistance(floydWarshall(city), 1, 6), 6.5),
+          "new roads 3-5 and 5-6: 1 -> 6 is 3 + 2 + 1.5 = 6.5 km");
+    check(floydMatchesDijkstra(city), "IDs with gaps: every pair agrees with Dijkstra");
+}
+
+void testFloydWarshallAfterChanges()
+{
+    cout << "\nFloyd-Warshall: after changing the city\n";
+    Graph city = makeRouteCity();
+
+    city.addRoad(1, 4, 2.0);   // a new shortcut
+    check(nearlyEqual(tableDistance(floydWarshall(city), 1, 4), 2.0) && floydMatchesDijkstra(city),
+          "after adding the road 1-4 (2 km): 1 -> 4 is 2 km");
+    city.updateRoad(1, 4, 10.0);
+    check(nearlyEqual(tableDistance(floydWarshall(city), 1, 4), 4.0) && floydMatchesDijkstra(city),
+          "after updating 1-4 to 10 km: back to the 4 km route");
+    city.removeRoad(3, 2);
+    check(nearlyEqual(tableDistance(floydWarshall(city), 1, 2), 4.0) && floydMatchesDijkstra(city),
+          "after deleting the road 3-2: 1 -> 2 uses the direct 4 km road");
+
+    int newId = city.addLocation("R6");
+    city.addRoad(newId, 5, 1.0);
+    city.addRoad(newId, 4, 1.0);
+    // 5 -> 6 -> 4 -> 2 -> 1 = 1 + 1 + 1 + 4 km (shorter than via 3 or the 10 km road)
+    check(nearlyEqual(tableDistance(floydWarshall(city), 5, 1), 7.0) && floydMatchesDijkstra(city),
+          "after adding location 6 with roads to 4 and 5: 5 -> 1 is 7 km");
+    city.removeLocation(4);
+    AllPairsResult table = floydWarshall(city);
+    check(table.indexOf.count(4) == 0 && tableDistance(table, 5, 1) == INFINITY && floydMatchesDijkstra(city),
+          "after deleting location 4: it is gone and 5 can no longer reach 1");
+
+    // Largest allowed distances: totals stay ordinary numbers.
+    Graph far;
+    for (int i = 1; i <= 4; i++) {
+        far.addLocation("F" + to_string(i));
+    }
+    far.addRoad(1, 2, MAX_ROAD_DISTANCE);
+    far.addRoad(2, 3, MAX_ROAD_DISTANCE);
+    far.addRoad(3, 4, MAX_ROAD_DISTANCE);
+    check(nearlyEqual(tableDistance(floydWarshall(far), 1, 4), 30000.0) && floydMatchesDijkstra(far),
+          "three 10,000 km roads: 1 -> 4 is 30,000 km");
+}
+
+void testFloydWarshallSampleCity()
+{
+    cout << "\nFloyd-Warshall: sample city (data/sample)\n";
+    // The tests run from the project folder or from a build folder.
+    string folder = "data/sample";
+    if (!filesystem::exists(folder + "/locations.csv")) {
+        folder = "../data/sample";
+    }
+    Graph city;
+    vector<string> messages;
+    loadCity(city, folder + "/locations.csv", folder + "/roads.csv", folder + "/next_id.txt", messages);
+    check(city.locationCount() == 10 && city.roadCount() == 14 && messages.empty(),
+          "the sample city loads: 10 locations, 14 roads");
+
+    AllPairsResult table = floydWarshall(city);
+    RouteResult route = allPairsRoute(table, 1, 10);
+    check(route.found && nearlyEqual(route.distance, 15.0) && isValidRoute(city, route.path, route.distance),
+          "BUBT -> Gulshan is 15 km over real roads (as with Dijkstra)");
+    bool allReachable = true;
+    for (const vector<double>& row : table.dist) {
+        for (double distance : row) {
+            allReachable = allReachable && distance != INFINITY;
+        }
+    }
+    check(allReachable, "the sample city is connected: every pair has a route");
+    check(floydMatchesDijkstra(city), "sample city: all 100 pairs agree with Dijkstra");
+}
+
 int main()
 {
     testLocations();
@@ -1220,6 +1483,12 @@ int main()
     testAlgorithmsWithLargeDistances();
     testFindDataFolder();
     testFirstRunSampleData();
+    testFloydWarshallBasics();
+    testFloydWarshallRoutes();
+    testFloydWarshallTies();
+    testFloydWarshallDisconnectedAndGaps();
+    testFloydWarshallAfterChanges();
+    testFloydWarshallSampleCity();
 
     cout << "\n" << passed << " passed, " << failed << " failed\n";
 

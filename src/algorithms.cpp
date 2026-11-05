@@ -1,7 +1,8 @@
 // Smart City Route & Infrastructure Planner
 // Copyright © 2026 Quad Core. All rights reserved.
 //
-// algorithms.cpp - BFS, DFS, Dijkstra and Kruskal (see algorithms.h).
+// algorithms.cpp - BFS, DFS, Dijkstra, Kruskal and Floyd–Warshall
+// (see algorithms.h).
 
 #include "algorithms.h"
 
@@ -251,4 +252,95 @@ SpanningResult kruskal(const Graph& city)
 
     result.connected = (result.components == 1);
     return result;
+}
+
+// ===== Floyd–Warshall: all-pairs shortest paths =====
+
+AllPairsResult floydWarshall(const Graph& city)
+{
+    AllPairsResult result;
+
+    // Give every location a row/column number in increasing ID order.
+    // (IDs can have gaps, e.g. 1, 2, 5, so the ID itself cannot be used.)
+    result.ids = city.getLocationIds();
+    int n = static_cast<int>(result.ids.size());
+    for (int i = 0; i < n; i++) {
+        result.indexOf[result.ids[i]] = i;
+    }
+
+    // Start: no routes known (INFINITY, next = -1), ...
+    result.dist.assign(n, vector<double>(n, INFINITY));
+    result.next.assign(n, vector<int>(n, -1));
+    for (int i = 0; i < n; i++) {
+        // ... a location is 0 km from itself, ...
+        result.dist[i][i] = 0.0;
+        result.next[i][i] = i;
+        // ... and each road is a route of one road (in both directions,
+        // because the road list of each location contains it).
+        for (const Edge& edge : city.getNeighbors(result.ids[i])) {
+            int j = result.indexOf[edge.to];
+            result.dist[i][j] = edge.distance;
+            result.next[i][j] = j;   // from i, go straight to j
+        }
+    }
+
+    // Step k: may the route from i to j go through location k?
+    for (int k = 0; k < n; k++) {
+        for (int i = 0; i < n; i++) {
+            // No route from i to k: going through k cannot help, and
+            // INFINITY + something must not be calculated.
+            if (result.dist[i][k] == INFINITY) {
+                continue;
+            }
+            for (int j = 0; j < n; j++) {
+                if (result.dist[k][j] == INFINITY) {
+                    continue;
+                }
+                double throughK = result.dist[i][k] + result.dist[k][j];
+                // Only a STRICTLY shorter route replaces the old one, so equal
+                // routes keep the first one found (deterministic result).
+                if (throughK < result.dist[i][j]) {
+                    result.dist[i][j] = throughK;
+                    // The first stop towards j is the first stop towards k.
+                    result.next[i][j] = result.next[i][k];
+                }
+            }
+        }
+    }
+    return result;
+}
+
+RouteResult allPairsRoute(const AllPairsResult& result, int startId, int endId)
+{
+    RouteResult route;   // found = false, distance = 0, empty path
+    auto start = result.indexOf.find(startId);
+    auto end = result.indexOf.find(endId);
+    if (start == result.indexOf.end() || end == result.indexOf.end()) {
+        return route;   // unknown location
+    }
+    int i = start->second;
+    int j = end->second;
+    if (result.dist[i][j] == INFINITY) {
+        return route;   // the locations are in different parts of the network
+    }
+
+    // Follow the "next" matrix from the start until the destination.
+    // A route never has more than n locations. The checks below are only a
+    // safety net for an inconsistent table: they report "no route" instead of
+    // returning an incomplete route or reading outside the matrix.
+    int n = static_cast<int>(result.ids.size());
+    vector<int> path = {result.ids[i]};
+    int current = i;
+    while (current != j) {
+        current = result.next[current][j];
+        if (current < 0 || current >= n || static_cast<int>(path.size()) >= n) {
+            return route;   // found is still false
+        }
+        path.push_back(result.ids[current]);
+    }
+
+    route.path = path;
+    route.found = true;
+    route.distance = result.dist[i][j];
+    return route;
 }

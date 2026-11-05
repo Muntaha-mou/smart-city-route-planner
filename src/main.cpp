@@ -541,6 +541,44 @@ double roadDistance(const Graph& city, int from, int to)
     return 0.0;   // not reached for roads on a route found by Dijkstra
 }
 
+// Prints a found route: the locations in order, each road with its distance,
+// and the total distance. Used by Dijkstra (option 12) and Floyd–Warshall
+// (option 14).
+void printRouteDetails(const Graph& city, const RouteResult& route)
+{
+    // The route, e.g.  BUBT [1] -> Mirpur 10 [2] -> Agargaon [4]
+    printSectionTitle("Shortest Route", Color::Title);
+    vector<string> stops;
+    for (int id : route.path) {
+        stops.push_back(nameWithId(city, id));
+    }
+    printChain(stops, Color::Success);
+
+    // Each road of the route with its own distance.
+    if (route.path.size() > 1) {
+        printBlankLine();
+        printSectionTitle("Road by Road", Color::Cyan);
+        for (size_t i = 0; i + 1 < route.path.size(); i++) {
+            int from = route.path[i];
+            int to = route.path[i + 1];
+            ostringstream number;
+            number << setw(3) << (i + 1) << ".";
+            cout << "  " << paint(number.str(), Color::Blue) << " "
+                 << cell(city.getName(from), 22, Color::Normal) << paint(arrow(), Color::Muted)
+                 << " " << cell(city.getName(to), 22, Color::Normal)
+                 << paint(formatNumber(roadDistance(city, from, to)) + " km", Color::Purple)
+                 << "\n";
+        }
+    }
+
+    printBlankLine();
+    printLine();
+    cout << "  " << paint("Total Distance: ", Color::Title)
+         << paint(formatNumber(route.distance) + " km", Color::Success) << "  "
+         << paint("(" + to_string(route.path.size() - 1) + " road(s))", Color::Muted) << "\n";
+    printLine();
+}
+
 // Option 12: find the shortest route between two locations.
 void findShortestRoute(const Graph& city)
 {
@@ -574,37 +612,7 @@ void findShortestRoute(const Graph& city)
         return;
     }
 
-    // The route, e.g.  BUBT [1] -> Mirpur 10 [2] -> Agargaon [4]
-    printSectionTitle("Shortest Route", Color::Title);
-    vector<string> stops;
-    for (int id : route.path) {
-        stops.push_back(nameWithId(city, id));
-    }
-    printChain(stops, Color::Success);
-
-    // Each road of the route with its own distance.
-    if (route.path.size() > 1) {
-        printBlankLine();
-        printSectionTitle("Road by Road", Color::Cyan);
-        for (size_t i = 0; i + 1 < route.path.size(); i++) {
-            int from = route.path[i];
-            int to = route.path[i + 1];
-            ostringstream number;
-            number << setw(3) << (i + 1) << ".";
-            cout << "  " << paint(number.str(), Color::Blue) << " "
-                 << cell(city.getName(from), 22, Color::Normal) << paint(arrow(), Color::Muted)
-                 << " " << cell(city.getName(to), 22, Color::Normal)
-                 << paint(formatNumber(roadDistance(city, from, to)) + " km", Color::Purple)
-                 << "\n";
-        }
-    }
-
-    printBlankLine();
-    printLine();
-    cout << "  " << paint("Total Distance: ", Color::Title)
-         << paint(formatNumber(route.distance) + " km", Color::Success) << "  "
-         << paint("(" + to_string(route.path.size() - 1) + " road(s))", Color::Muted) << "\n";
-    printLine();
+    printRouteDetails(city, route);
 }
 
 // ===== Minimum spanning tree (Kruskal) =====
@@ -669,6 +677,149 @@ void showMinimumSpanningTree(const Graph& city)
         printHint("This is a Minimum Spanning Forest: one minimum tree for each part.");
         printHint("No existing roads can join the parts together.");
     }
+}
+
+// ===== All-pairs shortest paths (Floyd–Warshall) =====
+
+// "Floyd–Warshall" with an en dash in colour mode, "Floyd-Warshall" in plain mode.
+string floydWarshallName()
+{
+    return colorsOn() ? "Floyd–Warshall" : "Floyd-Warshall";
+}
+
+// True if every two neighbouring locations on the route are joined by a road.
+bool routeUsesRealRoads(const Graph& city, const RouteResult& route)
+{
+    for (size_t i = 0; i + 1 < route.path.size(); i++) {
+        if (!city.hasRoad(route.path[i], route.path[i + 1])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// The text right-aligned in a field `width` characters wide.
+string rightAligned(const string& text, int width)
+{
+    int space = width - displayWidth(text);
+    return string(max(0, space), ' ') + text;
+}
+
+// Prints the distance matrix: one row and one column per location ID.
+// "0" = the same location, "--" = no route.
+// Returns false (and prints nothing) if the table is too wide for the screen.
+bool printDistanceMatrix(const AllPairsResult& table)
+{
+    int n = static_cast<int>(table.ids.size());
+
+    // Every column is as wide as its longest entry plus one space.
+    int width = 5;
+    for (int i = 0; i < n; i++) {
+        width = max(width, static_cast<int>(idText(table.ids[i]).size()) + 1);
+        for (int j = 0; j < n; j++) {
+            if (table.dist[i][j] != INFINITY) {
+                width = max(width, static_cast<int>(formatNumber(table.dist[i][j]).size()) + 1);
+            }
+        }
+    }
+    const int labelWidth = 6;   // the row label, e.g. "[10]  "
+    if (labelWidth + n * width > SCREEN_WIDTH - 2) {
+        return false;
+    }
+
+    // Header row: the location IDs.
+    cout << "  " << string(labelWidth, ' ');
+    for (int j = 0; j < n; j++) {
+        cout << paint(rightAligned(idText(table.ids[j]), width), Color::Cyan);
+    }
+    cout << "\n";
+    printLine();
+
+    // One row per location.
+    for (int i = 0; i < n; i++) {
+        cout << "  " << cell(idText(table.ids[i]), labelWidth, Color::Blue);
+        for (int j = 0; j < n; j++) {
+            if (i == j) {
+                cout << paint(rightAligned("0", width), Color::Muted);
+            } else if (table.dist[i][j] == INFINITY) {
+                cout << paint(rightAligned("--", width), Color::Warning);
+            } else {
+                cout << rightAligned(formatNumber(table.dist[i][j]), width);
+            }
+        }
+        cout << "\n";
+    }
+    printLine();
+    return true;
+}
+
+// Option 14: shortest distances between all pairs of locations, and the
+// shortest route between two chosen locations.
+void showAllPairsShortestPaths(const Graph& city)
+{
+    printScreenHeader("ALGORITHMS", "All-Pairs Shortest Paths (" + floydWarshallName() + ")");
+    if (city.locationCount() == 0) {
+        printWarning("The network is empty. Add some locations first.");
+        return;
+    }
+
+    printHint(floydWarshallName() + " (dynamic programming) finds the shortest distance");
+    printHint("between EVERY pair of locations. Step k allows location k as a stop");
+    printHint("in between. Time O(V^3), memory O(V^2).");
+    printBlankLine();
+
+    AllPairsResult table = floydWarshall(city);
+
+    printLocationsTable(city);
+    printBlankLine();
+    printSectionTitle("Distance Matrix (km)", Color::Title);
+    if (printDistanceMatrix(table)) {
+        printHint("Rows and columns are location IDs. 0 = same location, -- = no route.");
+    } else {
+        printInfo("The city has " + to_string(city.locationCount()) +
+                  " locations: the full table is too wide for the screen.");
+        printHint("Choose two locations below to see their shortest distance and route.");
+    }
+
+    // Is any pair of locations unreachable?
+    bool allReachable = true;
+    for (const vector<double>& row : table.dist) {
+        for (double distance : row) {
+            if (distance == INFINITY) {
+                allReachable = false;
+            }
+        }
+    }
+    if (!allReachable) {
+        printWarning("Some locations cannot reach each other: the network is in separate parts.");
+    }
+    printBlankLine();
+
+    int start = readInt("Start location ID: ");
+    if (!city.hasLocation(start)) {
+        printError("Location " + to_string(start) + " does not exist.");
+        return;
+    }
+    int destination = readInt("Destination location ID: ");
+    if (!city.hasLocation(destination)) {
+        printError("Location " + to_string(destination) + " does not exist.");
+        return;
+    }
+
+    RouteResult route = allPairsRoute(table, start, destination);
+    printBlankLine();
+    if (!route.found) {
+        printWarning("No route exists between these locations.");
+        printHint("(" + city.getName(start) + " and " + city.getName(destination) +
+                  " are in different parts of the network.)");
+        return;
+    }
+    // Safety check: the rebuilt route must only use roads that exist.
+    if (!routeUsesRealRoads(city, route)) {
+        printError("The rebuilt route uses a road that does not exist (program error).");
+        return;
+    }
+    printRouteDetails(city, route);
 }
 
 // ===== Main menu =====
@@ -741,6 +892,9 @@ void showMenu(const Graph& city, const string& notice)
     printMenuRow(10, "BFS Traversal", 13, "Kruskal's Minimum Spanning Tree", Color::Purple,
                  Color::Purple);
     printMenuRow(11, "DFS Traversal", 0, "", Color::Purple, Color::Purple);
+    cout << "   "
+         << menuItem(14, "All-Pairs Shortest Paths (" + floydWarshallName() + ")", Color::Purple, 0)
+         << "\n";
     printBlankLine();
     cout << "   " << menuItem(0, "Exit", Color::Error, 0) << "\n";
 
@@ -856,7 +1010,7 @@ int main(int argc, char* argv[])
             showExitScreen(city);
             break;
         }
-        if (choice < 0 || choice > 13) {
+        if (choice < 0 || choice > 14) {
             notice = "Please choose a number from the menu.";
             continue;
         }
@@ -888,6 +1042,8 @@ int main(int argc, char* argv[])
             findShortestRoute(city);
         } else if (choice == 13) {
             showMinimumSpanningTree(city);
+        } else if (choice == 14) {
+            showAllPairsShortestPaths(city);
         }
         waitForEnter();
     }

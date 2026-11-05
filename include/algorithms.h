@@ -13,6 +13,7 @@
 
 #include "graph.h"
 
+#include <map>
 #include <vector>
 
 // Breadth-First Search (BFS) starting at `startId`.
@@ -70,5 +71,37 @@ struct SpanningResult {
 // Time: O(E log E + V log V), which is O(E log E) for a connected network
 // (E >= V - 1). Space: O(V + E)
 SpanningResult kruskal(const Graph& city);
+
+// The result of the Floyd–Warshall algorithm: the shortest distance between
+// EVERY pair of locations.
+// Location IDs may have gaps (for example 1, 2, 5), so each location gets a
+// row/column number (index) 0, 1, 2, ... in increasing ID order:
+//   ids[index]   = the location ID of that row/column
+//   indexOf[id]  = the row/column of a location ID
+struct AllPairsResult {
+    std::vector<int> ids;
+    std::map<int, int> indexOf;
+    // dist[i][j] = shortest distance in km from ids[i] to ids[j];
+    //              INFINITY if there is no route; 0 on the diagonal.
+    std::vector<std::vector<double>> dist;
+    // next[i][j] = index of the location that comes right after ids[i] on a
+    //              shortest route to ids[j]; -1 if there is no route.
+    std::vector<std::vector<int>> next;
+};
+
+// Floyd–Warshall algorithm (dynamic programming): shortest distances between
+// all pairs of locations. Step k allows the k-th location as a stop in
+// between: dist[i][j] = min(dist[i][j], dist[i][k] + dist[k][j]).
+// Locations are tried as stops in increasing ID order, and a route is only
+// replaced by a STRICTLY shorter one, so the result is always the same.
+// Time: O(V^3), Space: O(V^2)
+AllPairsResult floydWarshall(const Graph& city);
+
+// The shortest route from `startId` to `endId`, rebuilt from the `next`
+// matrix of an AllPairsResult. Same rules as dijkstra():
+// - start and destination the same: found, distance 0, path {start}
+// - unknown ID or no route: found is false
+// Time: O(V) (at most V locations on a route)
+RouteResult allPairsRoute(const AllPairsResult& result, int startId, int endId);
 
 #endif // ALGORITHMS_H

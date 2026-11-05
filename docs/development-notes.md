@@ -77,7 +77,7 @@ so run them from a terminal where the MinGW `bin` folder is on the PATH.
 | `include/graph.h` | `Edge` and `Road` structs, `Graph` class declaration | No |
 | `src/graph.cpp` | The code of the `Graph` functions | No |
 | `include/storage.h`, `src/storage.cpp` | `saveCity()` and `loadCity()`: CSV files; `findDataFolder()` and `initializeFromSample()` | No (returns messages instead) |
-| `include/algorithms.h`, `src/algorithms.cpp` | `bfs()`, `dfs()`, `dijkstra()` and `kruskal()` | No |
+| `include/algorithms.h`, `src/algorithms.cpp` | `bfs()`, `dfs()`, `dijkstra()`, `kruskal()`, `floydWarshall()` and `allPairsRoute()` | No |
 | `include/ui.h`, `src/ui.cpp` | Console colours, borders, tables, messages and prompts (used only by `main.cpp`) | Yes |
 | `src/main.cpp` | Input functions, one function per menu option, `main()` | Yes |
 | `tests/tests.cpp` | Automatic checks for `Graph`, saving/loading, BFS, DFS, Dijkstra and Kruskal | Prints PASS/FAIL |
@@ -167,6 +167,8 @@ Functions marked `const` only *read* the graph; they never change it.
 | `kruskal(city)` | Minimum Spanning Tree (or Forest). Sorts `getRoads()` (each road once) with `isShorterRoad()`, then keeps a road only if `DisjointSet::unite()` joins two different groups. Counts components (V minus one per kept road). Returns a `SpanningResult { roads, totalDistance, components, connected }`. |
 | `DisjointSet` | Disjoint Set Union with two `map`s (`parent`, `rank`): `makeSet()`, `findRoot()` with path compression, and `unite()` with union by rank, which returns `false` when both locations are already in the same group (the road would make a cycle). |
 | `isShorterRoad(a, b)` | Sorting rule for Kruskal: shorter distance first; equal distances by smaller `from`, then smaller `to` ID. |
+| `floydWarshall(city)` | All-pairs shortest paths (dynamic programming). Gives each location a row/column number in increasing ID order (`ids`, `indexOf`, because IDs can have gaps), fills the V × V `dist` matrix with the direct roads (0 on the diagonal, `INFINITY` elsewhere) and the `next` matrix with the first stop, then allows each location k as a stop in between: `dist[i][j] = min(dist[i][j], dist[i][k] + dist[k][j])`. Skips `INFINITY` entries, so it never adds infinities. Only a strictly shorter route replaces an old one. Returns an `AllPairsResult { ids, indexOf, dist, next }`. |
+| `allPairsRoute(table, startId, endId)` | Rebuilds one shortest route from the `next` matrix (start, then `next[current][end]` until the end). Returns a `RouteResult` like `dijkstra()`: not found for unknown IDs or unreachable pairs, `{start}` with 0 km for the same location. An inconsistent table (missing next stop, or more than V locations) gives "not found" instead of an incomplete route. |
 
 See `docs/algorithms.md` for step-by-step explanations and examples.
 
@@ -189,6 +191,8 @@ See `docs/algorithms.md` for step-by-step explanations and examples.
 | `printLocationsTable(city)`, `printRoadsTable(city)` | The location and road tables used by several screens. |
 | `traverseNetwork(city, useBfs)` | Options 10 and 11. Asks for a start ID, runs `bfs()` or `dfs()`, prints the visiting order with names and IDs, how many locations were reached, and the locations that are not reachable. |
 | `findShortestRoute(city)` | Option 12. Asks for a start and a destination ID, runs `dijkstra()`, and prints the route (names and IDs), each road with its distance (`roadDistance()`), and the total distance, or "No route exists between these locations." |
+| `printRouteDetails(city, route)` | Prints a found route (locations, each road with its distance, total distance). Shared by options 12 and 14. |
+| `showAllPairsShortestPaths(city)` | Option 14. Runs `floydWarshall()`, shows the locations and the distance matrix (`printDistanceMatrix()`, skipped with a message if it is too wide for the screen), warns if some locations cannot reach each other, then asks for a start and a destination and shows the route from `allPairsRoute()`. Checks with `routeUsesRealRoads()` that the rebuilt route only uses existing roads. |
 | `showMinimumSpanningTree(city)` | Option 13. Runs `kruskal()` and prints the selected roads (names, IDs and distances), how many of the city's roads were selected, the total distance, and whether the result is a Minimum Spanning Tree (connected) or a Minimum Spanning Forest (with the number of components). |
 | `showMenu(city, notice)` | The dashboard: banner, number of locations and roads, data folder, the options in three categories, and an error line for a wrong option. |
 | `chooseDataFolder(programPath)` | Builds the list of possible data folders and calls `findDataFolder()`; a long path is shown relative to the current folder (for example `..\data`). |
@@ -226,7 +230,17 @@ duplicates (adding, renaming and loading), the 10,000 km distance limit
 Kruskal with the largest allowed distances. The console UI update added tests
 for `findDataFolder()` and `initializeFromSample()` (sample copied only when
 no working file exists, user changes never overwritten, nothing created when a
-file or the sample is missing): 310 checks in total. The save/load tests write
+file or the sample is missing). The S8.1 tests check Floyd–Warshall: empty
+city, one location, two locations, a chain, the Dijkstra cycle network (known
+distances and routes, symmetric matrix, 0 on the diagonal, `INFINITY` and
+`next = -1` for unreachable pairs), equally short routes (same route every
+time, also with roads added in another order and after saving/loading),
+separate parts, IDs with gaps, changes to roads and locations, the largest
+allowed distances, and the sample city. `floydMatchesDijkstra()` compares
+every pair with Dijkstra and checks every rebuilt route with
+`isValidRoute()`. Two safety-net tests check that an inconsistent table (a
+missing next stop or a loop) gives "no route" instead of an incomplete route:
+355 checks in total. The save/load tests write
 temporary files into a `test_data` folder. `main()` returns 1 if anything failed, so `ctest` reports
 the failure.
 
@@ -251,6 +265,8 @@ the failure.
 | 2026-11-04 | Plain console output (`cout`, `cin`, `setw` tables); no colours, box drawing or Windows-specific console code | Easier to read and explain; works in every terminal |
 | 2026-11-05 | Replaced by a colour console UI at the team lead's request: dark navy theme with ANSI colours, all screen code in `ui.cpp`, automatic plain-text fallback (`--plain`, `NO_COLOR`, redirected output) | A polished, readable interface for the demonstration; one helper module keeps colour codes out of the menu code; plain mode keeps it working in every terminal |
 | 2026-11-05 | First run copies the sample city only when none of the three working files exists; the program also finds the project `data` folder next to the `.exe` | Starting the program from `build-mingw` showed an empty city; existing data must never be overwritten |
+| 2026-11-05 | S8.1 adds Floyd–Warshall (listed as future work in the proposal), with an ID-to-index mapping, a `next` matrix and strict-improvement tie-breaking | Adds a dynamic-programming algorithm; IDs can have gaps; the same city must always give the same route |
+| 2026-11-05 | Floyd–Warshall reuses `RouteResult` and the route display of option 12 (`printRouteDetails()`) | One route format for both algorithms; easy to compare the results |
 | 2026-11-04 | A location is an automatic ID plus a name | IDs never need to be typed when adding; no extra fields |
 | 2026-11-04 | One weight per road: distance in km | Used by both Dijkstra and Kruskal; easy to explain |
 | 2026-11-04 | At most one road between two locations; roads are two-way | Simple undirected graph |
@@ -286,8 +302,14 @@ the failure.
 | S3 | BFS and DFS | Done (`f416196`) |
 | S4 | Dijkstra's shortest route | Done (`85f59c7`) |
 | S5 | Kruskal's minimum spanning tree | Done (`99fa2e4`) |
+| S6.1 | Read-only audit of code, tests and documentation | Done (no commit) |
 | S6.2 | Name rules (trimmed, case-insensitive) and 10,000 km road distance limit | Done (`7bcae7a`) |
-| S6 | Final tests, documentation, Pull Request to `master` | In progress |
+| S6.3 | Documentation consistency and final review (README status, Ninja optional, MinGW Makefiles option, milestone rows) | Done (`14e269f`) |
+| S6.4 | Final documentation update: Windows CMD build steps, WinLibs GCC 16.2.0 / CMake 4.4.4 toolchain | Done (`bf0ce8a`) |
+| S6 | Final tests, documentation, Pull Request to `master` | In progress (Pull Request not opened yet) |
+| S7 | Colour console UI (`ui.cpp`), first-run sample data, data folder next to the program | Done (`9ffda6e`) |
+| S8.1 | Floyd–Warshall all-pairs shortest paths (menu option 14) | Done |
+| S8.2 | Consistency and quality audit (route safety net, milestone history) | Done (committed together with S8.1) |
 
 ---
 
