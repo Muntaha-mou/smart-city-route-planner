@@ -526,7 +526,94 @@ always the same.
 `src/algorithms.cpp`; menu option 14 (`showAllPairsShortestPaths()` in
 `src/main.cpp`).
 
-## 7. Complexity Summary
+## 7. Best Facility Location: Eccentricity, Centre and Diameter
+
+**Problem:** where should a hospital, fire station or emergency centre be
+built, so that even the **farthest** location can be reached quickly?
+
+**Definitions** (d(u, v) = shortest distance, from the Floyd–Warshall table):
+
+| Term | Meaning | Formula |
+|---|---|---|
+| Eccentricity e(v) | distance from v to the location farthest away | e(v) = max d(v, u) over all locations u |
+| Radius | the smallest eccentricity | min e(v) |
+| Centre | the location(s) whose eccentricity equals the radius | argmin e(v) |
+| Diameter | the largest distance between two locations | max d(u, v) = max e(v) |
+
+A facility at the **centre** keeps the farthest location as close as possible
+(the "minimax" choice, suitable for emergency services).
+
+**Idea:** Floyd–Warshall (section 6) already knows every shortest distance, so
+no shortest path has to be calculated again: each eccentricity is simply the
+largest value in that location's row of the distance matrix.
+
+**Steps:**
+
+```
+BestFacilityLocation(table):
+    find the connected parts: two locations are in the same part
+        exactly when their distance is finite (not INFINITY)
+    for each location v:
+        e(v) = largest FINITE distance in row v
+    for each part:
+        radius   = smallest e(v) in the part
+        centres  = every v with e(v) within 1e-9 km of the radius
+        diameter = largest e(v) in the part
+        diameter pairs = every pair (a, b) with a < b and
+                         d(a, b) within 1e-9 km of the diameter
+```
+
+**Disconnected networks:** if some locations cannot reach each other, their
+distance is ∞, so **every** eccentricity of the whole network is ∞: there is
+no single centre and the diameter is infinite. The program says so and then
+analyses **each connected part on its own**, using only the distances inside
+that part: each part needs its own facility. A location without roads is a
+part on its own (eccentricity 0); it is reported as **isolated**, never as the
+best location. An empty city has no parts; a city with one location has that
+location as its centre (eccentricity 0, diameter 0).
+
+**Equal values (ties):** distances are decimal numbers, and the computer
+cannot store every decimal exactly (0.1 + 0.2 is not exactly 0.3). Two values
+that differ by less than **1e-9 km** (`DISTANCE_TOLERANCE`) are therefore
+treated as equal. All tied centres are shown, in increasing ID order. Each
+diameter pair is listed once, with the smaller ID first, and the pairs are
+sorted. The parts are ordered by their smallest location ID.
+
+**Data structures:** `NetworkPart { locations, centres, radius, diameter,
+diameterPairs }` for each part, and `FacilityResult { eccentricity (map ID →
+km), parts, connected }`.
+
+**Complexity:** finding the parts, the eccentricities and the diameter pairs
+each look at every cell of the V × V matrix once: **O(V²)** time, plus the
+O(V³) Floyd–Warshall run that produces the matrix (done once). Extra memory:
+**O(V)**, plus the list of diameter pairs (at most V(V − 1)/2 when every
+distance is equal).
+
+**Example** (the network of section 6, final distance matrix):
+
+| Location | Distances to 1, 2, 3, 4 | e(v) |
+|---|---|---|
+| 1 | 0, 3, 1, 4 | 4 |
+| 2 | 3, 0, 2, 1 | **3** |
+| 3 | 1, 2, 0, 3 | **3** |
+| 4 | 4, 1, 3, 0 | 4 |
+
+Radius 3 km: the centres are locations **2 and 3** (a tie). Diameter 4 km:
+the only pair that far apart is **(1, 4)**.
+
+On the sample data the centre is **Mirpur 10 [2]** (its farthest location is
+14 km away) and the diameter is 21.7 km, between Mohammadpur [7] and
+Uttara [8].
+
+**Limitation:** the centre is always one of the existing locations. The
+mathematically best point could lie part-way along a road, and minimising the
+**total** distance to all locations (the "median", useful for a warehouse) is
+a different question that is not part of this project.
+
+**Where in the code:** `bestFacilityLocation()` in `src/algorithms.cpp`; menu
+option 15 (`showBestFacilityLocation()` in `src/main.cpp`).
+
+## 8. Complexity Summary
 
 | Algorithm | Time | Extra memory | Data structures |
 |---|---|---|---|
@@ -535,6 +622,7 @@ always the same.
 | Dijkstra | O((V + E) log V) | O(V + E) | min-priority queue, maps |
 | Kruskal | O(E log E + V log V); O(E log E) if connected | O(V + E) | sorted vector, DSU |
 | Floyd–Warshall | O(V³) | O(V²) | distance matrix, next-hop matrix |
+| Best facility location | O(V²) after Floyd–Warshall | O(V) + diameter pairs | distance matrix, parts, map of eccentricities |
 
 (BFS and DFS also sort each neighbour list for a stable order, which adds
 O(E log V) in the worst case.)

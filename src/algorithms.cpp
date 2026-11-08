@@ -1,8 +1,8 @@
 // Smart City Route & Infrastructure Planner
 // Copyright © 2026 Quad Core. All rights reserved.
 //
-// algorithms.cpp - BFS, DFS, Dijkstra, Kruskal and Floyd–Warshall
-// (see algorithms.h).
+// algorithms.cpp - BFS, DFS, Dijkstra, Kruskal, Floyd–Warshall and the best
+// facility location (see algorithms.h).
 
 #include "algorithms.h"
 
@@ -343,4 +343,81 @@ RouteResult allPairsRoute(const AllPairsResult& result, int startId, int endId)
     route.found = true;
     route.distance = result.dist[i][j];
     return route;
+}
+
+// ===== Best facility location: eccentricity, centre and diameter =====
+
+FacilityResult bestFacilityLocation(const AllPairsResult& table)
+{
+    FacilityResult result;
+    int n = static_cast<int>(table.ids.size());
+
+    // 1. Find the connected parts. Two locations are in the same part exactly
+    //    when the distance between them is finite (not INFINITY). The rows are
+    //    visited in increasing ID order, so the parts come out ordered by
+    //    their smallest ID, and the locations of each part in increasing order.
+    vector<int> partOf(n, -1);       // row -> part number (-1 = not yet in a part)
+    vector<vector<int>> partRows;    // part number -> its rows
+    for (int i = 0; i < n; i++) {
+        if (partOf[i] != -1) {
+            continue;   // already found as a member of an earlier part
+        }
+        int partNumber = static_cast<int>(partRows.size());
+        partRows.push_back({});
+        result.parts.push_back(NetworkPart());
+        for (int j = 0; j < n; j++) {
+            if (table.dist[i][j] != INFINITY) {   // includes i itself (distance 0)
+                partOf[j] = partNumber;
+                partRows[partNumber].push_back(j);
+                result.parts[partNumber].locations.push_back(table.ids[j]);
+            }
+        }
+    }
+
+    // 2. Eccentricity: the largest FINITE distance from each location, so only
+    //    the locations of its own part count. An isolated location gets 0.
+    vector<double> eccentricity(n, 0.0);
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < n; j++) {
+            if (table.dist[i][j] != INFINITY) {
+                eccentricity[i] = max(eccentricity[i], table.dist[i][j]);
+            }
+        }
+        result.eccentricity[table.ids[i]] = eccentricity[i];
+    }
+
+    // 3. For each part: radius (smallest eccentricity), centre(s), diameter
+    //    (largest eccentricity) and the pair(s) of locations that are that
+    //    far apart.
+    for (size_t p = 0; p < result.parts.size(); p++) {
+        NetworkPart& part = result.parts[p];
+        const vector<int>& rows = partRows[p];
+
+        part.radius = eccentricity[rows[0]];
+        part.diameter = eccentricity[rows[0]];
+        for (int i : rows) {
+            part.radius = min(part.radius, eccentricity[i]);
+            part.diameter = max(part.diameter, eccentricity[i]);
+        }
+
+        // Every location within the tolerance of the radius is a centre
+        // (ties are all kept, in increasing ID order).
+        for (int i : rows) {
+            if (eccentricity[i] - part.radius <= DISTANCE_TOLERANCE) {
+                part.centres.push_back(table.ids[i]);
+            }
+        }
+
+        // Each pair (a, b) only once: rows[x] before rows[y] means a < b.
+        for (size_t x = 0; x < rows.size(); x++) {
+            for (size_t y = x + 1; y < rows.size(); y++) {
+                if (part.diameter - table.dist[rows[x]][rows[y]] <= DISTANCE_TOLERANCE) {
+                    part.diameterPairs.push_back({table.ids[rows[x]], table.ids[rows[y]]});
+                }
+            }
+        }
+    }
+
+    result.connected = (result.parts.size() == 1);
+    return result;
 }

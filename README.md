@@ -12,7 +12,8 @@ and plan a minimum road network.
 > updated and deleted, the city is saved to CSV files, the network can be
 > explored with BFS and DFS, the shortest route is found with Dijkstra's
 > algorithm, and the minimum road network is found with Kruskal's algorithm.
-> S8.1 adds all-pairs shortest paths with the Floyd–Warshall algorithm.
+> S8.1 adds all-pairs shortest paths with the Floyd–Warshall algorithm, and
+> S8.3 adds the best facility location (network centre and diameter).
 
 ## Features
 
@@ -28,6 +29,7 @@ and plan a minimum road network.
 | Shortest route with Dijkstra's algorithm | Done (S4) |
 | Minimum spanning tree with Kruskal's algorithm | Done (S5) |
 | All-pairs shortest paths with the Floyd–Warshall algorithm | Done (S8.1) |
+| Best facility location: eccentricity, network centre and diameter | Done (S8.3) |
 | Colour console UI (dark navy theme) with plain-text fallback | Done |
 | Start with the sample city on the first run | Done |
 
@@ -37,11 +39,12 @@ and plan a minimum road network.
 CMakeLists.txt      Build instructions for CMake
 include/graph.h     Edge and Road structs, Graph class (declarations)
 include/storage.h   Saving and loading the city (declarations)
-include/algorithms.h  Graph algorithms: BFS, DFS, Dijkstra, Kruskal, Floyd–Warshall (declarations)
+include/algorithms.h  Graph algorithms: BFS, DFS, Dijkstra, Kruskal, Floyd–Warshall,
+                    best facility location (declarations)
 include/ui.h        Console colours and screen layout helpers (declarations)
 src/graph.cpp       Graph functions (the city data)
 src/storage.cpp     CSV save and load, data folder, first-run sample copy
-src/algorithms.cpp  BFS, DFS, Dijkstra, Kruskal and Floyd–Warshall
+src/algorithms.cpp  BFS, DFS, Dijkstra, Kruskal, Floyd–Warshall and best facility location
 src/ui.cpp          Console colours, borders, tables and messages
 src/main.cpp        Menu program: input, output and menu options
 tests/tests.cpp     Automatic checks for the Graph, saving/loading and all algorithms

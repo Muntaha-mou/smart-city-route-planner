@@ -90,6 +90,7 @@ looks like this (in colour mode the same layout uses colours and box lines):
    10  BFS Traversal                 13  Kruskal's Minimum Spanning Tree
    11  DFS Traversal
    14  All-Pairs Shortest Paths (Floyd-Warshall)
+   15  Best Facility Location
 
     0  Exit
   ----------------------------------------------------------------------
@@ -374,7 +375,49 @@ Row `[1]` (BUBT) shows that Gulshan `[10]` is 15.00 km away, the same as the
 Dijkstra example in section 9. See [algorithms.md](algorithms.md) for how
 Floyd–Warshall works.
 
-## 12. Troubleshooting
+## 12. Best Facility Location
+
+- **Best Facility Location (15)** needs no input. It shows where a hospital,
+  fire station or emergency centre should be built: the location whose
+  **farthest** location is as close as possible (the network **centre**).
+- The table lists, for every location, the distance to its farthest location
+  (its **eccentricity**, using the Floyd–Warshall distances). The centre is
+  marked `<- centre` (a green `◄ centre` in colour mode).
+- Below the table: the **best location(s)**, the distance to the farthest
+  location from there (the **radius**), and the **diameter** (the two
+  locations farthest apart). Equally good locations and equally long pairs
+  are all shown (a long list ends with "and N more"). Each pair is listed
+  once, with the smaller ID first.
+- If the network is in separate parts, a yellow `[ WARN ]` says that there is
+  no single centre and the diameter is infinite. The table gets a **Part**
+  column, and the centre and diameter are shown **for each part**, because
+  each part needs its own facility. Locations without roads are listed as
+  **isolated**; they are never shown as the best location.
+- If the city is empty, the program says so. With one location, that location
+  is the centre.
+
+Example (sample data):
+
+```
+  ID      Location                      Farthest (km)
+  ----------------------------------------------------------------------
+  [1]     BUBT                                  16.50
+  [2]     Mirpur 10                             14.00   <- centre
+  ...
+  [8]     Uttara                                21.70
+  ...
+  Network Centre and Diameter
+  -------------------------------
+  Best location: Mirpur 10 [2]
+  Farthest location from it: 14.00 km  (radius)
+  Diameter: 21.70 km  (the two locations farthest apart)
+    - Mohammadpur [7] <-> Uttara [8]
+```
+
+See [algorithms.md](algorithms.md) for the definitions and how the centre is
+calculated.
+
+## 13. Troubleshooting
 
 | Problem | Solution |
 |---|---|

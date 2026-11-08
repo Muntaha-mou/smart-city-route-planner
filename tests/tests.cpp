@@ -1449,6 +1449,322 @@ void testFloydWarshallSampleCity()
     check(floydMatchesDijkstra(city), "sample city: all 100 pairs agree with Dijkstra");
 }
 
+// ===== S8.3: best facility location (eccentricity, centre, diameter) =====
+
+// Checks a FacilityResult against the Floyd–Warshall table, calculated
+// independently here:
+// - every location is in exactly one part, parts ordered by smallest ID;
+// - eccentricity = the largest finite distance in the location's row;
+// - the centres are exactly the locations whose eccentricity is (within the
+//   tolerance) the smallest of their part, and radius/diameter match;
+// - the diameter pairs are exactly the pairs (a < b) at the diameter distance.
+bool facilityMatchesTable(const Graph& city)
+{
+    AllPairsResult table = floydWarshall(city);
+    FacilityResult result = bestFacilityLocation(table);
+    int n = static_cast<int>(table.ids.size());
+
+    // Every location exactly once, parts ordered by their smallest ID.
+    vector<int> seen;
+    int lastFirstId = 0;
+    for (const NetworkPart& part : result.parts) {
+        if (part.locations.empty() || part.locations.front() <= lastFirstId) {
+            return false;
+        }
+        lastFirstId = part.locations.front();
+        seen.insert(seen.end(), part.locations.begin(), part.locations.end());
+    }
+    sort(seen.begin(), seen.end());
+    if (seen != city.getLocationIds() || result.connected != (result.parts.size() == 1)) {
+        return false;
+    }
+
+    for (const NetworkPart& part : result.parts) {
+        double smallest = INFINITY;
+        double largest = 0.0;
+        for (int id : part.locations) {
+            int i = table.indexOf.at(id);
+            double expected = 0.0;
+            for (int j = 0; j < n; j++) {
+                if (table.dist[i][j] != INFINITY) {
+                    expected = max(expected, table.dist[i][j]);
+                }
+            }
+            if (!nearlyEqual(result.eccentricity.at(id), expected)) {
+                return false;
+            }
+            smallest = min(smallest, expected);
+            largest = max(largest, expected);
+        }
+        if (!nearlyEqual(part.radius, smallest) || !nearlyEqual(part.diameter, largest)) {
+            return false;
+        }
+        vector<int> centres;
+        vector<pair<int, int>> pairs;
+        for (int a : part.locations) {
+            if (result.eccentricity.at(a) - smallest <= DISTANCE_TOLERANCE) {
+                centres.push_back(a);
+            }
+            for (int b : part.locations) {
+                if (a < b && largest - tableDistance(table, a, b) <= DISTANCE_TOLERANCE) {
+                    pairs.push_back({a, b});
+                }
+            }
+        }
+        if (centres != part.centres || pairs != part.diameterPairs) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// A chain 1 - 2 - ... - count, every road `length` km.
+Graph makeChain(int count, double length)
+{
+    Graph chain;
+    for (int i = 1; i <= count; i++) {
+        chain.addLocation("P" + to_string(i));
+    }
+    for (int i = 1; i < count; i++) {
+        chain.addRoad(i, i + 1, length);
+    }
+    return chain;
+}
+
+void testFacilityBasics()
+{
+    cout << "\nBest facility location: special cases\n";
+    Graph empty;
+    FacilityResult none = bestFacilityLocation(floydWarshall(empty));
+    check(none.parts.empty() && none.eccentricity.empty() && !none.connected,
+          "an empty city: no parts, not connected");
+
+    Graph single;
+    single.addLocation("BUBT");
+    FacilityResult one = bestFacilityLocation(floydWarshall(single));
+    check(one.connected && one.parts.size() == 1 && one.eccentricity.at(1) == 0.0,
+          "one location: connected, eccentricity 0");
+    check(one.parts[0].centres == vector<int>{1} && one.parts[0].radius == 0.0 &&
+              one.parts[0].diameter == 0.0 && one.parts[0].diameterPairs.empty(),
+          "one location: it is the centre; radius and diameter 0, no diameter pair");
+
+    Graph two;
+    two.addLocation("A");
+    two.addLocation("B");
+    two.addRoad(1, 2, 2.5);
+    FacilityResult twoResult = bestFacilityLocation(floydWarshall(two));
+    check(nearlyEqual(twoResult.eccentricity.at(1), 2.5) && nearlyEqual(twoResult.eccentricity.at(2), 2.5),
+          "two locations 2.5 km apart: both eccentricities are 2.5");
+    check(twoResult.parts[0].centres == vector<int>({1, 2}), "two locations: both are centres (tie)");
+    check(nearlyEqual(twoResult.parts[0].diameter, 2.5) &&
+              twoResult.parts[0].diameterPairs == vector<pair<int, int>>({{1, 2}}),
+          "two locations: diameter 2.5 with the pair (1, 2) listed once");
+}
+
+void testFacilityChainsAndCycles()
+{
+    cout << "\nBest facility location: chains and cycles\n";
+    // Chain 1 - 2 - 3 - 4 with roads of 1, 2 and 3 km.
+    Graph chain;
+    for (int i = 1; i <= 4; i++) {
+        chain.addLocation("C" + to_string(i));
+    }
+    chain.addRoad(1, 2, 1.0);
+    chain.addRoad(2, 3, 2.0);
+    chain.addRoad(3, 4, 3.0);
+    FacilityResult line = bestFacilityLocation(floydWarshall(chain));
+    check(nearlyEqual(line.eccentricity.at(1), 6.0) && nearlyEqual(line.eccentricity.at(2), 5.0) &&
+              nearlyEqual(line.eccentricity.at(3), 3.0) && nearlyEqual(line.eccentricity.at(4), 6.0),
+          "chain 1-2-3-4 (1, 2, 3 km): eccentricities 6, 5, 3, 6");
+    check(line.parts[0].centres == vector<int>{3} && nearlyEqual(line.parts[0].radius, 3.0),
+          "chain: the centre is location 3 (radius 3 km)");
+    check(nearlyEqual(line.parts[0].diameter, 6.0) &&
+              line.parts[0].diameterPairs == vector<pair<int, int>>({{1, 4}}),
+          "chain: diameter 6 km between 1 and 4");
+
+    // Chain of 4 with equal roads: two middle locations tie.
+    FacilityResult even = bestFacilityLocation(floydWarshall(makeChain(4, 1.0)));
+    check(even.parts[0].centres == vector<int>({2, 3}) && nearlyEqual(even.parts[0].radius, 2.0),
+          "chain of 4 equal roads: two centres {2, 3}, radius 2 km");
+    check(nearlyEqual(even.parts[0].diameter, 3.0) &&
+              even.parts[0].diameterPairs == vector<pair<int, int>>({{1, 4}}),
+          "chain of 4 equal roads: diameter 3 km between 1 and 4");
+
+    // The Dijkstra cycle network without location 5.
+    Graph cycle = makeRouteCity();
+    cycle.removeLocation(5);
+    FacilityResult round = bestFacilityLocation(floydWarshall(cycle));
+    check(round.connected, "cycle network: connected");
+    check(nearlyEqual(round.eccentricity.at(1), 4.0) && nearlyEqual(round.eccentricity.at(2), 3.0) &&
+              nearlyEqual(round.eccentricity.at(3), 3.0) && nearlyEqual(round.eccentricity.at(4), 4.0),
+          "cycle network: eccentricities 4, 3, 3, 4");
+    check(round.parts[0].centres == vector<int>({2, 3}) && nearlyEqual(round.parts[0].radius, 3.0),
+          "cycle network: centres {2, 3}, radius 3 km");
+    check(nearlyEqual(round.parts[0].diameter, 4.0) &&
+              round.parts[0].diameterPairs == vector<pair<int, int>>({{1, 4}}),
+          "cycle network: diameter 4 km between 1 and 4");
+
+    // A square of equal roads: every location is a centre, two diameter pairs.
+    Graph square;
+    for (int i = 1; i <= 4; i++) {
+        square.addLocation("S" + to_string(i));
+    }
+    square.addRoad(1, 2, 1.0);
+    square.addRoad(2, 4, 1.0);
+    square.addRoad(1, 3, 1.0);
+    square.addRoad(3, 4, 1.0);
+    FacilityResult box = bestFacilityLocation(floydWarshall(square));
+    check(box.parts[0].centres == vector<int>({1, 2, 3, 4}), "square of equal roads: all 4 are centres");
+    check(nearlyEqual(box.parts[0].diameter, 2.0) &&
+              box.parts[0].diameterPairs == vector<pair<int, int>>({{1, 4}, {2, 3}}),
+          "square: diameter 2 km for the opposite pairs (1, 4) and (2, 3), no reversed duplicates");
+    check(facilityMatchesTable(chain) && facilityMatchesTable(cycle) && facilityMatchesTable(square),
+          "chain, cycle and square agree with the Floyd-Warshall table");
+}
+
+void testFacilityDisconnected()
+{
+    cout << "\nBest facility location: separate parts\n";
+    // Triangle 1-2-3 (1, 2, 3 km), pair 4-5 (4 km), location 6 without roads.
+    Graph city;
+    for (int i = 1; i <= 6; i++) {
+        city.addLocation("D" + to_string(i));
+    }
+    city.addRoad(1, 2, 1.0);
+    city.addRoad(2, 3, 2.0);
+    city.addRoad(1, 3, 3.0);
+    city.addRoad(4, 5, 4.0);
+    FacilityResult result = bestFacilityLocation(floydWarshall(city));
+    check(!result.connected && result.parts.size() == 3, "three separate parts, not connected");
+    check(result.parts[0].locations == vector<int>({1, 2, 3}) &&
+              result.parts[1].locations == vector<int>({4, 5}) &&
+              result.parts[2].locations == vector<int>{6},
+          "parts ordered by smallest ID: {1, 2, 3}, {4, 5}, {6}");
+    check(result.parts[0].centres == vector<int>{2} && nearlyEqual(result.parts[0].radius, 2.0) &&
+              nearlyEqual(result.parts[0].diameter, 3.0) &&
+              result.parts[0].diameterPairs == vector<pair<int, int>>({{1, 3}}),
+          "triangle part: centre 2 (radius 2 km), diameter 3 km between 1 and 3");
+    check(result.parts[1].centres == vector<int>({4, 5}) && nearlyEqual(result.parts[1].diameter, 4.0),
+          "pair part: centres {4, 5}, diameter 4 km");
+    check(result.parts[2].centres == vector<int>{6} && result.eccentricity.at(6) == 0.0 &&
+              result.parts[2].diameter == 0.0 && result.parts[2].diameterPairs.empty(),
+          "isolated location 6: eccentricity 0, its own part, no diameter pair");
+    check(result.eccentricity.at(1) != INFINITY && result.eccentricity.at(4) != INFINITY,
+          "eccentricities count only the location's own part (never INFINITY)");
+    check(facilityMatchesTable(city), "separate parts agree with the Floyd-Warshall table");
+
+    // The Dijkstra network with location 5 (no roads): parts of unequal size.
+    Graph uneven = makeRouteCity();
+    FacilityResult unevenResult = bestFacilityLocation(floydWarshall(uneven));
+    check(unevenResult.parts.size() == 2 && unevenResult.parts[0].locations.size() == 4 &&
+              unevenResult.parts[1].locations == vector<int>{5},
+          "a part of 4 locations and an isolated location 5");
+    check(unevenResult.parts[0].centres == vector<int>({2, 3}) &&
+              nearlyEqual(unevenResult.parts[0].diameter, 4.0),
+          "the isolated location does not change the big part: centres {2, 3}, diameter 4 km");
+
+    // ID gaps: delete 2 and 4, so the IDs are 1, 3, 5, 6 (road 1-3 is left).
+    city.removeLocation(2);
+    city.removeLocation(4);
+    FacilityResult gaps = bestFacilityLocation(floydWarshall(city));
+    check(gaps.parts.size() == 3 && gaps.parts[0].locations == vector<int>({1, 3}) &&
+              gaps.parts[1].locations == vector<int>{5} && gaps.parts[2].locations == vector<int>{6},
+          "IDs with gaps: parts {1, 3}, {5}, {6}");
+    check(gaps.parts[0].centres == vector<int>({1, 3}) && nearlyEqual(gaps.parts[0].diameter, 3.0),
+          "IDs with gaps: part {1, 3} has centres {1, 3} and diameter 3 km");
+    check(facilityMatchesTable(city), "IDs with gaps agree with the Floyd-Warshall table");
+}
+
+void testFacilityAfterChanges()
+{
+    cout << "\nBest facility location: after changing the city\n";
+    // Chain 1-2-3-4-5 with 1 km roads: centre 3, diameter 4 (1, 5).
+    Graph city = makeChain(5, 1.0);
+    FacilityResult before = bestFacilityLocation(floydWarshall(city));
+    check(before.parts[0].centres == vector<int>{3} && nearlyEqual(before.parts[0].diameter, 4.0),
+          "chain of 5: centre 3, diameter 4 km");
+
+    city.addRoad(1, 5, 1.0);   // the chain becomes a cycle of 5
+    FacilityResult cycle = bestFacilityLocation(floydWarshall(city));
+    check(cycle.parts[0].centres == vector<int>({1, 2, 3, 4, 5}) && nearlyEqual(cycle.parts[0].radius, 2.0),
+          "after adding road 1-5: a cycle, every location is a centre (radius 2 km)");
+    check(nearlyEqual(cycle.parts[0].diameter, 2.0) &&
+              cycle.parts[0].diameterPairs ==
+                  vector<pair<int, int>>({{1, 3}, {1, 4}, {2, 4}, {2, 5}, {3, 5}}),
+          "the cycle of 5: diameter 2 km for 5 pairs, sorted, each once");
+
+    city.updateRoad(1, 5, 10.0);   // too long to be useful
+    FacilityResult updated = bestFacilityLocation(floydWarshall(city));
+    check(updated.parts[0].centres == vector<int>{3} && nearlyEqual(updated.parts[0].diameter, 4.0) &&
+              updated.parts[0].diameterPairs == vector<pair<int, int>>({{1, 5}}),
+          "after updating 1-5 to 10 km: centre 3 and diameter 4 km again");
+
+    city.removeRoad(1, 5);
+    city.removeRoad(3, 4);   // splits the chain into 1-2-3 and 4-5
+    FacilityResult split = bestFacilityLocation(floydWarshall(city));
+    check(!split.connected && split.parts.size() == 2, "after deleting roads 1-5 and 3-4: two parts");
+    check(split.parts[0].centres == vector<int>{2} && nearlyEqual(split.parts[0].diameter, 2.0) &&
+              split.parts[1].centres == vector<int>({4, 5}) && nearlyEqual(split.parts[1].diameter, 1.0),
+          "part 1-2-3: centre 2, diameter 2 km; part 4-5: centres {4, 5}, diameter 1 km");
+
+    int newId = city.addLocation("P6");
+    city.addRoad(newId, 3, 1.0);
+    city.addRoad(newId, 4, 1.0);   // joins the two parts: chain 1-2-3-6-4-5
+    FacilityResult joined = bestFacilityLocation(floydWarshall(city));
+    check(joined.connected && joined.parts[0].centres == vector<int>({3, 6}) &&
+              nearlyEqual(joined.parts[0].diameter, 5.0),
+          "after adding location 6 between 3 and 4: connected, centres {3, 6}, diameter 5 km");
+    city.removeLocation(newId);
+    check(!bestFacilityLocation(floydWarshall(city)).connected && facilityMatchesTable(city),
+          "after deleting location 6: separate parts again");
+}
+
+void testFacilityTolerance()
+{
+    cout << "\nBest facility location: rounding tolerance\n";
+    // A tree with centre M = 1. Two branches of the same length:
+    //   1 -0.1- 2 -0.2- 3       and       1 -0.15- 4 -0.15- 5
+    // and a third branch 1 -0.4- 6. The pairs (3, 6) and (5, 6) are both
+    // 0.7 km apart, but computed as 0.1 + 0.2 + 0.4 and 0.15 + 0.15 + 0.4.
+    Graph tree;
+    for (int i = 1; i <= 6; i++) {
+        tree.addLocation("T" + to_string(i));
+    }
+    tree.addRoad(1, 2, 0.1);
+    tree.addRoad(2, 3, 0.2);
+    tree.addRoad(1, 4, 0.15);
+    tree.addRoad(4, 5, 0.15);
+    tree.addRoad(1, 6, 0.4);
+    AllPairsResult table = floydWarshall(tree);
+    check(tableDistance(table, 3, 6) != tableDistance(table, 5, 6),
+          "the two 0.7 km distances differ in the last digits (rounding)");
+    FacilityResult result = bestFacilityLocation(table);
+    check(result.parts[0].diameterPairs == vector<pair<int, int>>({{3, 6}, {5, 6}}),
+          "with the 1e-9 km tolerance both pairs are diameter pairs");
+    check(result.parts[0].centres == vector<int>{1}, "the centre of the tree is location 1");
+}
+
+void testFacilitySampleCity()
+{
+    cout << "\nBest facility location: sample city (data/sample)\n";
+    string folder = "data/sample";
+    if (!filesystem::exists(folder + "/locations.csv")) {
+        folder = "../data/sample";
+    }
+    Graph city;
+    vector<string> messages;
+    loadCity(city, folder + "/locations.csv", folder + "/roads.csv", folder + "/next_id.txt", messages);
+    FacilityResult result = bestFacilityLocation(floydWarshall(city));
+    check(result.connected && result.parts.size() == 1 && result.parts[0].locations.size() == 10,
+          "the sample city is one connected part of 10 locations");
+    check(result.parts[0].centres == vector<int>{2} && nearlyEqual(result.parts[0].radius, 14.0),
+          "the centre is Mirpur 10 [2]: its farthest location is 14 km away");
+    check(nearlyEqual(result.parts[0].diameter, 21.7) &&
+              result.parts[0].diameterPairs == vector<pair<int, int>>({{7, 8}}),
+          "the diameter is 21.7 km, between Mohammadpur [7] and Uttara [8]");
+    check(facilityMatchesTable(city), "the sample city agrees with the Floyd-Warshall table");
+}
+
 int main()
 {
     testLocations();
@@ -1489,6 +1805,12 @@ int main()
     testFloydWarshallDisconnectedAndGaps();
     testFloydWarshallAfterChanges();
     testFloydWarshallSampleCity();
+    testFacilityBasics();
+    testFacilityChainsAndCycles();
+    testFacilityDisconnected();
+    testFacilityAfterChanges();
+    testFacilityTolerance();
+    testFacilitySampleCity();
 
     cout << "\n" << passed << " passed, " << failed << " failed\n";
 

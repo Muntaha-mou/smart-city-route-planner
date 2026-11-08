@@ -77,7 +77,7 @@ so run them from a terminal where the MinGW `bin` folder is on the PATH.
 | `include/graph.h` | `Edge` and `Road` structs, `Graph` class declaration | No |
 | `src/graph.cpp` | The code of the `Graph` functions | No |
 | `include/storage.h`, `src/storage.cpp` | `saveCity()` and `loadCity()`: CSV files; `findDataFolder()` and `initializeFromSample()` | No (returns messages instead) |
-| `include/algorithms.h`, `src/algorithms.cpp` | `bfs()`, `dfs()`, `dijkstra()`, `kruskal()`, `floydWarshall()` and `allPairsRoute()` | No |
+| `include/algorithms.h`, `src/algorithms.cpp` | `bfs()`, `dfs()`, `dijkstra()`, `kruskal()`, `floydWarshall()`, `allPairsRoute()` and `bestFacilityLocation()` | No |
 | `include/ui.h`, `src/ui.cpp` | Console colours, borders, tables, messages and prompts (used only by `main.cpp`) | Yes |
 | `src/main.cpp` | Input functions, one function per menu option, `main()` | Yes |
 | `tests/tests.cpp` | Automatic checks for `Graph`, saving/loading, BFS, DFS, Dijkstra and Kruskal | Prints PASS/FAIL |
@@ -169,6 +169,7 @@ Functions marked `const` only *read* the graph; they never change it.
 | `isShorterRoad(a, b)` | Sorting rule for Kruskal: shorter distance first; equal distances by smaller `from`, then smaller `to` ID. |
 | `floydWarshall(city)` | All-pairs shortest paths (dynamic programming). Gives each location a row/column number in increasing ID order (`ids`, `indexOf`, because IDs can have gaps), fills the V × V `dist` matrix with the direct roads (0 on the diagonal, `INFINITY` elsewhere) and the `next` matrix with the first stop, then allows each location k as a stop in between: `dist[i][j] = min(dist[i][j], dist[i][k] + dist[k][j])`. Skips `INFINITY` entries, so it never adds infinities. Only a strictly shorter route replaces an old one. Returns an `AllPairsResult { ids, indexOf, dist, next }`. |
 | `allPairsRoute(table, startId, endId)` | Rebuilds one shortest route from the `next` matrix (start, then `next[current][end]` until the end). Returns a `RouteResult` like `dijkstra()`: not found for unknown IDs or unreachable pairs, `{start}` with 0 km for the same location. An inconsistent table (missing next stop, or more than V locations) gives "not found" instead of an incomplete route. |
+| `bestFacilityLocation(table)` | Best facility location from a Floyd–Warshall table (no new shortest paths). Finds the connected parts (same part = finite distance), the eccentricity of each location (largest finite distance in its row), and for each part the radius, the centre(s), the diameter and the diameter pairs (a < b, each once). Values within `DISTANCE_TOLERANCE` (1e-9 km) count as equal. Returns a `FacilityResult { eccentricity, parts, connected }` with one `NetworkPart { locations, centres, radius, diameter, diameterPairs }` per part, ordered by smallest ID. O(V²). |
 
 See `docs/algorithms.md` for step-by-step explanations and examples.
 
@@ -193,6 +194,7 @@ See `docs/algorithms.md` for step-by-step explanations and examples.
 | `findShortestRoute(city)` | Option 12. Asks for a start and a destination ID, runs `dijkstra()`, and prints the route (names and IDs), each road with its distance (`roadDistance()`), and the total distance, or "No route exists between these locations." |
 | `printRouteDetails(city, route)` | Prints a found route (locations, each road with its distance, total distance). Shared by options 12 and 14. |
 | `showAllPairsShortestPaths(city)` | Option 14. Runs `floydWarshall()`, shows the locations and the distance matrix (`printDistanceMatrix()`, skipped with a message if it is too wide for the screen), warns if some locations cannot reach each other, then asks for a start and a destination and shows the route from `allPairsRoute()`. Checks with `routeUsesRealRoads()` that the rebuilt route only uses existing roads. |
+| `showBestFacilityLocation(city)` | Option 15. Runs `floydWarshall()` once and `bestFacilityLocation()`, shows the eccentricity table (with a Part column only for a disconnected network, `◄ centre` / `<- centre` and `isolated` marks), then the centre, radius and diameter (`printPartSummary()`), for the whole network or, with a warning, for each part. Tied centres, diameter pairs and isolated locations are listed one per line; long lists end with "and N more" (`printListLines()`). Every line fits the 72-column layout. |
 | `showMinimumSpanningTree(city)` | Option 13. Runs `kruskal()` and prints the selected roads (names, IDs and distances), how many of the city's roads were selected, the total distance, and whether the result is a Minimum Spanning Tree (connected) or a Minimum Spanning Forest (with the number of components). |
 | `showMenu(city, notice)` | The dashboard: banner, number of locations and roads, data folder, the options in three categories, and an error line for a wrong option. |
 | `chooseDataFolder(programPath)` | Builds the list of possible data folders and calls `findDataFolder()`; a long path is shown relative to the current folder (for example `..\data`). |
@@ -239,8 +241,14 @@ separate parts, IDs with gaps, changes to roads and locations, the largest
 allowed distances, and the sample city. `floydMatchesDijkstra()` compares
 every pair with Dijkstra and checks every rebuilt route with
 `isValidRoute()`. Two safety-net tests check that an inconsistent table (a
-missing next stop or a loop) gives "no route" instead of an incomplete route:
-355 checks in total. The save/load tests write
+missing next stop or a loop) gives "no route" instead of an incomplete route.
+The S8.3 tests check the best facility location: empty city, one location,
+two locations, chains (one centre and two tied centres), the cycle network,
+a square (all centres, two diameter pairs), separate parts of unequal size,
+isolated locations, IDs with gaps, changes to roads and locations, a rounding
+tie (0.1 + 0.2 + 0.4 against 0.15 + 0.15 + 0.4) and the sample city.
+`facilityMatchesTable()` recalculates everything from the Floyd–Warshall
+table and compares: 400 checks in total. The save/load tests write
 temporary files into a `test_data` folder. `main()` returns 1 if anything failed, so `ctest` reports
 the failure.
 
@@ -267,6 +275,9 @@ the failure.
 | 2026-11-05 | First run copies the sample city only when none of the three working files exists; the program also finds the project `data` folder next to the `.exe` | Starting the program from `build-mingw` showed an empty city; existing data must never be overwritten |
 | 2026-11-05 | S8.1 adds Floyd–Warshall (listed as future work in the proposal), with an ID-to-index mapping, a `next` matrix and strict-improvement tie-breaking | Adds a dynamic-programming algorithm; IDs can have gaps; the same city must always give the same route |
 | 2026-11-05 | Floyd–Warshall reuses `RouteResult` and the route display of option 12 (`printRouteDetails()`) | One route format for both algorithms; easy to compare the results |
+| 2026-11-08 | S8.3: the best facility location uses the Floyd–Warshall table and calculates no new shortest paths | O(V²) on top of the existing table; one source of distances |
+| 2026-11-08 | A disconnected network has no single centre and an infinite diameter; the centre, radius and diameter are calculated for each connected part, and isolated locations are reported separately | Treating ∞ as 0 or as a normal number would give a wrong centre; each part needs its own facility |
+| 2026-11-08 | Eccentricities and distances within 1e-9 km (`DISTANCE_TOLERANCE`) count as equal; diameter pairs are listed once with the smaller ID first | Rounding errors (0.1 + 0.2 ≠ 0.3) must not hide ties; deterministic output |
 | 2026-11-04 | A location is an automatic ID plus a name | IDs never need to be typed when adding; no extra fields |
 | 2026-11-04 | One weight per road: distance in km | Used by both Dijkstra and Kruskal; easy to explain |
 | 2026-11-04 | At most one road between two locations; roads are two-way | Simple undirected graph |
@@ -310,6 +321,7 @@ the failure.
 | S7 | Colour console UI (`ui.cpp`), first-run sample data, data folder next to the program | Done (`9ffda6e`) |
 | S8.1 | Floyd–Warshall all-pairs shortest paths (menu option 14) | Done |
 | S8.2 | Consistency and quality audit (route safety net, milestone history) | Done (committed together with S8.1) |
+| S8.3 | Best facility location: eccentricity, network centre and diameter (menu option 15) | Done |
 
 ---
 

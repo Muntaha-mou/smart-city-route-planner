@@ -20,6 +20,7 @@
 #include <filesystem>
 #include <iomanip>
 #include <iostream>
+#include <map>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -822,6 +823,157 @@ void showAllPairsShortestPaths(const Graph& city)
     printRouteDetails(city, route);
 }
 
+// ===== Best facility location (network centre) =====
+
+// Prints a list one item per line ("    - item"), at most 5 items, then
+// "... and N more". One item per line keeps long names on the screen.
+void printListLines(const vector<string>& items, Color color)
+{
+    const size_t limit = 5;
+    for (size_t i = 0; i < items.size() && i < limit; i++) {
+        cout << "    " << paint("- " + items[i], color) << "\n";
+    }
+    if (items.size() > limit) {
+        printHint("  ... and " + to_string(items.size() - limit) + " more");
+    }
+}
+
+// Prints the centre and the diameter of one connected part (2 or more locations).
+void printPartSummary(const Graph& city, const NetworkPart& part)
+{
+    if (part.centres.size() == 1) {
+        cout << "  " << paint("Best location: ", Color::Title)
+             << paint(nameWithId(city, part.centres[0]), Color::Success) << "\n";
+    } else {
+        // Tied centres: one per line.
+        cout << "  " << paint("Best locations (equally good):", Color::Title) << "\n";
+        vector<string> centres;
+        for (int id : part.centres) {
+            centres.push_back(nameWithId(city, id));
+        }
+        printListLines(centres, Color::Success);
+    }
+    string fromText = part.centres.size() == 1 ? "Farthest location from it: " : "Farthest location from each: ";
+    cout << "  " << paint(fromText, Color::Title)
+         << paint(formatNumber(part.radius) + " km", Color::Success)
+         << paint("  (radius)", Color::Muted) << "\n";
+    cout << "  " << paint("Diameter: ", Color::Title)
+         << paint(formatNumber(part.diameter) + " km", Color::Cyan)
+         << paint("  (the two locations farthest apart)", Color::Muted) << "\n";
+    vector<string> pairs;
+    for (const pair<int, int>& ends : part.diameterPairs) {
+        pairs.push_back(nameWithId(city, ends.first) + " " + twoWay() + " " +
+                        nameWithId(city, ends.second));
+    }
+    printListLines(pairs, Color::Normal);
+}
+
+// Option 15: the best place for a facility such as a hospital or fire station.
+void showBestFacilityLocation(const Graph& city)
+{
+    printScreenHeader("ALGORITHMS", "Best Facility Location");
+    if (city.locationCount() == 0) {
+        printWarning("The network is empty. Add some locations first.");
+        return;
+    }
+
+    printHint("The best place for a hospital or fire station is the network centre:");
+    printHint("the location whose FARTHEST location is as close as possible.");
+    printHint("Eccentricity = distance to the farthest location (" + floydWarshallName() + ").");
+    printBlankLine();
+
+    // The shortest distances are calculated once, by Floyd–Warshall.
+    AllPairsResult table = floydWarshall(city);
+    FacilityResult result = bestFacilityLocation(table);
+
+    // Which part each location is in, and whether it is a centre.
+    map<int, size_t> partNumber;
+    map<int, bool> isCentre;
+    for (size_t p = 0; p < result.parts.size(); p++) {
+        for (int id : result.parts[p].locations) {
+            partNumber[id] = p + 1;
+        }
+        for (int id : result.parts[p].centres) {
+            isCentre[id] = true;
+        }
+    }
+
+    // The eccentricity table. The "Part" column is only needed when the
+    // network is in separate parts.
+    string centreMark = colorsOn() ? "◄ centre" : "<- centre";
+    vector<int> widths = {8, 30, 16};
+    vector<string> header = {"ID", "Location", "Farthest (km)"};
+    if (!result.connected) {
+        widths = {8, 30, 6, 16};
+        header = {"ID", "Location", "Part", "Farthest (km)"};
+    }
+    printTableRow(header, widths, Color::Cyan);
+    printLine();
+    for (int id : city.getLocationIds()) {
+        size_t part = partNumber[id];
+        bool isolated = result.parts[part - 1].locations.size() == 1;
+        cout << "  " << cell(idText(id), 8, Color::Blue) << cell(city.getName(id), 30, Color::Normal);
+        if (!result.connected) {
+            cout << cell(to_string(part), 6, Color::Purple);
+        }
+        cout << paint(rightAligned(formatNumber(result.eccentricity[id]), 13), Color::Normal);
+        if (isolated && city.locationCount() > 1) {
+            cout << "   " << paint("isolated", Color::Warning);
+        } else if (isCentre[id]) {
+            cout << "   " << paint(centreMark, Color::Success);
+        }
+        cout << "\n";
+    }
+    printLine();
+    printBlankLine();
+
+    // Connected network: one centre and one diameter.
+    if (result.connected) {
+        printSectionTitle("Network Centre and Diameter", Color::Title);
+        if (city.locationCount() == 1) {
+            printInfo("Only one location: " + nameWithId(city, city.getLocationIds()[0]) +
+                      " is the centre.");
+            cout << "  " << paint("Radius: ", Color::Title) << paint("0.00 km", Color::Success)
+                 << paint("   Diameter: ", Color::Title) << paint("0.00 km", Color::Cyan)
+                 << paint("  (no other location)", Color::Muted) << "\n";
+            return;
+        }
+        printPartSummary(city, result.parts[0]);
+        printBlankLine();
+        printHint("A facility here keeps the farthest location as close as possible.");
+        return;
+    }
+
+    // Separate parts: no single centre, so each part is analysed on its own.
+    printWarning("The network has " + to_string(result.parts.size()) +
+                 " separate parts: there is no single centre.");
+    printHint("Its diameter is infinite. Each part needs its own facility:");
+    vector<int> isolatedIds;
+    for (size_t p = 0; p < result.parts.size(); p++) {
+        const NetworkPart& part = result.parts[p];
+        if (part.locations.size() == 1) {
+            isolatedIds.push_back(part.locations[0]);
+            continue;
+        }
+        printBlankLine();
+        printSectionTitle("Part " + to_string(p + 1) + " (" + to_string(part.locations.size()) +
+                              " locations)",
+                          Color::Purple);
+        printPartSummary(city, part);
+    }
+    if (!isolatedIds.empty()) {
+        // One per line, in the same style as the "Not reachable" list of BFS/DFS.
+        printBlankLine();
+        printWarning("Isolated locations (no road reaches them):");
+        vector<string> isolated;
+        for (int id : isolatedIds) {
+            isolated.push_back(nameWithId(city, id));
+        }
+        printListLines(isolated, Color::Warning);
+        printHint("Each isolated location needs its own facility.");
+    }
+}
+
 // ===== Main menu =====
 
 // One menu entry, e.g. " 1  Add Location", padded to `width` characters.
@@ -895,6 +1047,7 @@ void showMenu(const Graph& city, const string& notice)
     cout << "   "
          << menuItem(14, "All-Pairs Shortest Paths (" + floydWarshallName() + ")", Color::Purple, 0)
          << "\n";
+    cout << "   " << menuItem(15, "Best Facility Location", Color::Purple, 0) << "\n";
     printBlankLine();
     cout << "   " << menuItem(0, "Exit", Color::Error, 0) << "\n";
 
@@ -1010,7 +1163,7 @@ int main(int argc, char* argv[])
             showExitScreen(city);
             break;
         }
-        if (choice < 0 || choice > 14) {
+        if (choice < 0 || choice > 15) {
             notice = "Please choose a number from the menu.";
             continue;
         }
@@ -1044,6 +1197,8 @@ int main(int argc, char* argv[])
             showMinimumSpanningTree(city);
         } else if (choice == 14) {
             showAllPairsShortestPaths(city);
+        } else if (choice == 15) {
+            showBestFacilityLocation(city);
         }
         waitForEnter();
     }

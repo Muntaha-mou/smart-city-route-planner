@@ -14,6 +14,7 @@
 #include "graph.h"
 
 #include <map>
+#include <utility>
 #include <vector>
 
 // Breadth-First Search (BFS) starting at `startId`.
@@ -103,5 +104,47 @@ AllPairsResult floydWarshall(const Graph& city);
 // - unknown ID or no route: found is false
 // Time: O(V) (at most V locations on a route)
 RouteResult allPairsRoute(const AllPairsResult& result, int startId, int endId);
+
+// ----- Best facility location (network centre) -----
+//
+// The eccentricity e(v) of a location v is the largest shortest-path distance
+// from v to any other location: how far away the FARTHEST location is.
+// The centre of a network is the location (or locations) with the smallest
+// eccentricity, called the radius: the best place for a hospital or fire
+// station, because it keeps the farthest location as close as possible.
+// The diameter is the largest shortest-path distance between two locations.
+//
+// In a disconnected network some distances are infinite, so there is no
+// single centre and the diameter is infinite. Then every connected part is
+// analysed on its own, using only the distances inside that part.
+
+// Two distances closer than this (in km) count as equal, so that rounding
+// errors (0.1 + 0.2 is not exactly 0.3) do not hide a tie.
+const double DISTANCE_TOLERANCE = 1e-9;
+
+// One connected part of the network.
+struct NetworkPart {
+    std::vector<int> locations;                       // location IDs, increasing
+    std::vector<int> centres;                         // IDs with the smallest eccentricity, increasing
+    double radius = 0.0;                              // eccentricity of the centre(s), in km
+    double diameter = 0.0;                            // largest distance inside the part, in km
+    std::vector<std::pair<int, int>> diameterPairs;   // (a, b) with a < b, each pair once, sorted
+};
+
+// The result of the best facility location analysis.
+struct FacilityResult {
+    std::map<int, double> eccentricity;   // location ID -> eccentricity inside its own part
+    std::vector<NetworkPart> parts;       // ordered by the smallest location ID of each part
+    bool connected = false;               // true only if there is exactly one part
+};
+
+// Finds the eccentricity of every location, and the centre, radius and
+// diameter of every connected part, from a Floyd–Warshall table.
+// No shortest paths are calculated again.
+// - Empty city: no parts, not connected.
+// - One location: one part, eccentricity 0, it is the centre, diameter 0.
+// - An isolated location is a part of its own (eccentricity 0).
+// Time: O(V^2), Space: O(V) plus the list of diameter pairs
+FacilityResult bestFacilityLocation(const AllPairsResult& table);
 
 #endif // ALGORITHMS_H
