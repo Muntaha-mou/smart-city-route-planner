@@ -156,7 +156,7 @@ smart-city-route-planner/
 │   └── tests.cpp         400 automated checks
 ├── data/
 │   └── sample/           Sample network: 10 Dhaka locations, 14 roads
-├── docs/                 Algorithms, user guide, development notes
+├── docs/                 Algorithms, user guide, development notes, proposal/
 └── future-gui/           Parked Qt 6 prototype (not built)
 ```
 
@@ -438,6 +438,8 @@ Each screen asks only for the IDs it needs and explains invalid input. The
 | [docs/algorithms.md](docs/algorithms.md) | Graph representation and every algorithm, with steps, worked examples and complexity |
 | [docs/user-guide.md](docs/user-guide.md) | Building (Command Prompt) and using every menu option |
 | [docs/development-notes.md](docs/development-notes.md) | Toolchain, code walkthrough, tests, Git workflow, decision log and milestones |
+| [Project proposal (PDF)](docs/proposal/smart-city-route-planner-proposal-revised.pdf) | Revised project proposal |
+| [Project proposal (Word)](docs/proposal/smart-city-route-planner-proposal-revised.docx) | Revised project proposal, editable version |
 
 ## Team
 
