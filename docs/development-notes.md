@@ -57,8 +57,9 @@ build-mingw\SmartCityPlanner.exe
 Replace the `cd /d` path with your own project folder. The configure command
 (`cmake -S ...`) is needed only once; after changing code, run
 `cmake --build build-mingw` again. To start again from a clean state, delete
-the `build-mingw` folder. The README describes every step, including how to
-copy the sample data safely.
+the `build-mingw` folder. The README describes the compiler installation, both
+build options (PowerShell) and how to test safely in a separate folder; the
+user guide describes the same steps for the Command Prompt.
 
 **Ninja (optional):** configure a separate build folder with Ninja instead,
 for example `cmake -S . -B build -G Ninja`, then use `build` in the other
@@ -278,6 +279,7 @@ the failure.
 | 2026-11-08 | S8.3: the best facility location uses the Floyd–Warshall table and calculates no new shortest paths | O(V²) on top of the existing table; one source of distances |
 | 2026-11-08 | A disconnected network has no single centre and an infinite diameter; the centre, radius and diameter are calculated for each connected part, and isolated locations are reported separately | Treating ∞ as 0 or as a normal number would give a wrong centre; each part needs its own facility |
 | 2026-11-08 | Eccentricities and distances within 1e-9 km (`DISTANCE_TOLERANCE`) count as equal; diameter pairs are listed once with the smaller ID first | Rounding errors (0.1 + 0.2 ≠ 0.3) must not hide ties; deterministic output |
+| 2026-11-11 | MIT License added (`LICENSE`, copyright holder Quad Core); README rewritten with WinLibs installation, PowerShell build steps for both generators and test scenarios | Requested by the team lead; a public repository needs a clear license and reliable setup instructions |
 | 2026-11-04 | A location is an automatic ID plus a name | IDs never need to be typed when adding; no extra fields |
 | 2026-11-04 | One weight per road: distance in km | Used by both Dijkstra and Kruskal; easy to explain |
 | 2026-11-04 | At most one road between two locations; roads are two-way | Simple undirected graph |
