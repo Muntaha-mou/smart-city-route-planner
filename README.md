@@ -1,7 +1,6 @@
 # Smart City Route & Infrastructure Planner
 
-A C++17 console application that models a city road network as a **weighted,
-undirected graph** and applies classic graph algorithms to answer planning
+A C++17 console application that models a city road network as a **weighted, undirected graph** and applies classic graph algorithms to answer planning
 questions: which locations can be reached, what is the shortest route, which
 roads keep the city connected at the lowest total length, how far apart every
 pair of locations is, and where a facility such as a hospital should be built.
