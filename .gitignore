@@ -1,0 +1,42 @@
+# Build output
+build/
+build-*/
+out/
+cmake-build-*/
+CMakeUserPresets.json
+CMakeLists.txt.user*
+compile_commands.json
+
+# Compiled files
+*.exe
+*.dll
+*.o
+*.obj
+*.a
+*.lib
+*.pdb
+*.ilk
+
+# Editors and IDEs
+.vs/
+.vscode/
+.idea/
+.qtcreator/
+*.user
+*.swp
+
+# Operating system files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Temporary files and exported reports
+*.tmp
+*.bak
+reports/
+
+# Working data created by the program (sample data is in data/sample/)
+data/locations.csv
+data/roads.csv
+data/next_id.txt
+test_data/

@@ -1,0 +1,65 @@
+/*
+ * Smart City Route & Infrastructure Planner - application stylesheet
+ * Copyright © 2026 Quad Core. All rights reserved.
+ *
+ * Palette
+ *   Primary #172B4D   Secondary #253858   Accent #1677C8   Teal #0F9D91
+ *   Background #F5F7FA   Surface #FFFFFF   Border #DFE4EA
+ *   Text #172B4D   Muted text #6B778C
+ *   Success #16865C   Warning #D99016   Error #D64545
+ */
+
+QMainWindow,
+QWidget {
+    background-color: #F5F7FA;
+    color: #172B4D;
+}
+
+QFrame#appHeader {
+    background-color: #172B4D;
+    border: none;
+}
+
+QFrame#appHeader QLabel {
+    background-color: transparent;
+}
+
+QLabel#appTitle {
+    color: #FFFFFF;
+    font-size: 16pt;
+    font-weight: 600;
+}
+
+QLabel#appSubtitle {
+    color: #B3BAC5;
+    font-size: 10pt;
+}
+
+QFrame#contentArea {
+    background-color: #F5F7FA;
+}
+
+QLabel#pageHeading {
+    font-size: 14pt;
+    font-weight: 600;
+}
+
+QLabel#bodyText {
+    font-size: 10.5pt;
+}
+
+QLabel#mutedText {
+    color: #6B778C;
+}
+
+QStatusBar {
+    background-color: #FFFFFF;
+    border-top: 1px solid #DFE4EA;
+    color: #6B778C;
+}
+
+QStatusBar QLabel {
+    background-color: transparent;
+    color: #6B778C;
+    padding: 2px 8px;
+}
